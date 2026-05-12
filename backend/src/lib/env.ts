@@ -12,8 +12,8 @@ export const env = {
   frontendOrigin: process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000',
   statusPollIntervalMs: num('STATUS_POLL_INTERVAL_MS', 10_000),
   statusHttpTimeoutMs: num('STATUS_HTTP_TIMEOUT_MS', 5_000),
-  sshInstallTimeoutMs: num('SSH_INSTALL_TIMEOUT_MS', 300_000),
-  sshPostInstallHealthcheckTimeoutMs: num('SSH_POSTINSTALL_HEALTHCHECK_TIMEOUT_MS', 120_000),
+  sshInstallTimeoutMs: num('SSH_INSTALL_TIMEOUT_MS', 1_800_000),
+  sshPostInstallHealthcheckTimeoutMs: num('SSH_POSTINSTALL_HEALTHCHECK_TIMEOUT_MS', 180_000),
   installScriptUrl:
     process.env.INSTALL_SCRIPT_URL ??
     'https://raw.githubusercontent.com/princetadhani/my-app-for-radiusctrl/main/docker/one-click-install.sh',
