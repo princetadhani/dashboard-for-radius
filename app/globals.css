@@ -1,0 +1,130 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0a0e1a;
+  --card: #151a26;
+  --border: #272c38;
+  --neon-blue: #3399ff;
+  --neon-green: #9ece6a;
+  --neon-red: #ef4444;
+  --text: #e6edf3;
+  --text-dim: #8b95a8;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-neon-blue: var(--neon-blue);
+  --color-neon-green: var(--neon-green);
+  --color-neon-red: var(--neon-red);
+  --color-text: var(--text);
+  --color-text-dim: var(--text-dim);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains);
+}
+
+html,
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background-image:
+    linear-gradient(rgba(39, 44, 56, 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(39, 44, 56, 0.35) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-attachment: fixed;
+}
+
+.glass {
+  background: rgba(21, 26, 38, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+}
+
+@keyframes neon-pulse-green {
+  0%,
+  100% {
+    box-shadow: 0 0 6px var(--neon-green), 0 0 12px rgba(158, 206, 106, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 10px var(--neon-green), 0 0 22px rgba(158, 206, 106, 0.85);
+  }
+}
+
+@keyframes neon-pulse-red {
+  0%,
+  100% {
+    box-shadow: 0 0 6px var(--neon-red), 0 0 12px rgba(239, 68, 68, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 10px var(--neon-red), 0 0 22px rgba(239, 68, 68, 0.85);
+  }
+}
+
+@keyframes neon-pulse-blue {
+  0%,
+  100% {
+    box-shadow: 0 0 6px var(--neon-blue), 0 0 12px rgba(51, 153, 255, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 10px var(--neon-blue), 0 0 22px rgba(51, 153, 255, 0.85);
+  }
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  display: inline-block;
+}
+
+.dot-green {
+  background: var(--neon-green);
+  animation: neon-pulse-green 1.8s ease-in-out infinite;
+}
+
+.dot-red {
+  background: var(--neon-red);
+  animation: neon-pulse-red 1.8s ease-in-out infinite;
+}
+
+.dot-gray {
+  background: #4a5160;
+}
+
+.input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--text);
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input:focus {
+  border-color: var(--neon-blue);
+  box-shadow: 0 0 0 3px rgba(51, 153, 255, 0.15);
+}
+.input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3f4d;
+}
