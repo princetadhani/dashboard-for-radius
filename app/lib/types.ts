@@ -3,6 +3,7 @@ export type Host = {
   friendlyName: string;
   ipAddress: string;
   port: number;
+  tags: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -27,8 +28,25 @@ export type ProvisionLog = {
   line: string;
   level: "info" | "stderr" | "system";
   ts: number;
+  sessionId?: string;
+};
+
+export type ProvisionStep = {
+  n: number;
+  total: number;
+  label: string;
+  ts: number;
+  sessionId?: string;
 };
 
 export type ProvisionDone =
-  | { success: true; host: Host }
-  | { success: false; error: string };
+  | { success: true; host?: Host; sessionId?: string }
+  | { success: false; error: string; sessionId?: string };
+
+export type SshActionType = "reinstall" | "restart-service" | "update-script";
+
+export type SshActionCreds = {
+  sshPort: number;
+  sshUsername: string;
+  sshPassword: string;
+};

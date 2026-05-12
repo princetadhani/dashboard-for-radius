@@ -1,4 +1,4 @@
-import type { Host, HostStatusUpdate } from "./types";
+import type { Host, HostStatusUpdate, SshActionCreds, SshActionType } from "./types";
 
 export const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000";
@@ -30,6 +30,7 @@ export async function createHost(input: {
   friendlyName: string;
   ipAddress: string;
   port: number;
+  tags: string[];
   sshPort: number;
   sshUsername: string;
   sshPassword: string;
@@ -42,7 +43,7 @@ export async function createHost(input: {
 
 export async function updateHost(
   id: string,
-  input: { friendlyName?: string; ipAddress?: string; port?: number },
+  input: { friendlyName?: string; ipAddress?: string; port?: number; tags?: string[] },
 ): Promise<Host> {
   return jsonFetch(`/api/hosts/${id}`, {
     method: "PATCH",
@@ -53,3 +54,29 @@ export async function updateHost(
 export async function deleteHost(id: string): Promise<void> {
   await jsonFetch(`/api/hosts/${id}`, { method: "DELETE" });
 }
+
+export async function runHostAction(
+  id: string,
+  action: SshActionType,
+  creds: SshActionCreds,
+): Promise<{ sessionId: string }> {
+  return jsonFetch(`/api/hosts/${id}/actions`, {
+    method: "POST",
+    body: JSON.stringify({ action, ...creds }),
+  });
+}
+
+export async function copyConfig(
+  sourceHostId: string,
+  input: {
+    targetHostId: string;
+    source: { sshPort: number; sshUsername: string; sshPassword: string };
+    target: { sshPort: number; sshUsername: string; sshPassword: string };
+  },
+): Promise<{ sessionId: string }> {
+  return jsonFetch(`/api/hosts/${sourceHostId}/copy-config`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+

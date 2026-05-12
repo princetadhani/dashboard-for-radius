@@ -1,33 +1,43 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Radio, RefreshCw } from "lucide-react";
-import type { Host, HostStatusUpdate } from "./lib/types";
+import { Plus, Radio } from "lucide-react";
+import { toast } from "sonner";
+import type { Host, HostStatusUpdate, SshActionType } from "./lib/types";
 import { fetchHosts, deleteHost } from "./lib/api";
 import { getSocket } from "./lib/socket";
-import { HostsTable } from "./components/HostsTable";
+import { HostsTable, type SortState } from "./components/HostsTable";
 import { SidePanel } from "./components/SidePanel";
+import { Toolbar, type StatusFilter } from "./components/Toolbar";
+import { SshActionModal } from "./components/SshActionModal";
+import { CopyConfigModal } from "./components/CopyConfigModal";
 
 export default function DashboardPage() {
   const [hosts, setHosts] = useState<Host[]>([]);
   const [statusMap, setStatusMap] = useState<Map<string, HostStatusUpdate>>(new Map());
-  const [loading, setLoading] = useState(true);
+  const [, setTick] = useState(0);
+
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelMode, setPanelMode] = useState<"create" | "edit">("create");
   const [editing, setEditing] = useState<Host | null>(null);
-  const [, setTick] = useState(0);
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
+  const [sort, setSort] = useState<SortState>(null);
+
+  const [actionOpen, setActionOpen] = useState(false);
+  const [actionType, setActionType] = useState<SshActionType | null>(null);
+  const [actionHost, setActionHost] = useState<Host | null>(null);
+
+  const [copySource, setCopySource] = useState<Host | null>(null);
 
   const reload = useCallback(async () => {
-    try {
-      setLoading(true);
-      const { hosts, statuses } = await fetchHosts();
-      setHosts(hosts);
-      const m = new Map<string, HostStatusUpdate>();
-      for (const s of statuses) m.set(s.hostId, s);
-      setStatusMap(m);
-    } finally {
-      setLoading(false);
-    }
+    const { hosts, statuses } = await fetchHosts();
+    setHosts(hosts);
+    const m = new Map<string, HostStatusUpdate>();
+    for (const s of statuses) m.set(s.hostId, s);
+    setStatusMap(m);
   }, []);
 
   useEffect(() => {
@@ -51,6 +61,7 @@ export default function DashboardPage() {
     };
     const onCreated = (h: Host) => {
       setHosts((prev) => (prev.some((p) => p.id === h.id) ? prev : [h, ...prev]));
+      toast.success(`Provisioned ${h.friendlyName}`);
     };
     const onUpdated = (h: Host) => {
       setHosts((prev) => prev.map((p) => (p.id === h.id ? h : p)));
@@ -77,6 +88,46 @@ export default function DashboardPage() {
     };
   }, []);
 
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const h of hosts) for (const t of h.tags) set.add(t);
+    return Array.from(set).sort();
+  }, [hosts]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let out = hosts.filter((h) => {
+      if (q && !h.friendlyName.toLowerCase().includes(q) && !h.ipAddress.includes(q)) {
+        return false;
+      }
+      if (activeTags.size > 0 && !h.tags.some((t) => activeTags.has(t))) {
+        return false;
+      }
+      if (statusFilter !== "all") {
+        const s = statusMap.get(h.id);
+        if (statusFilter === "healthy" && !s?.service.healthy) return false;
+        if (statusFilter === "unhealthy" && (!s?.reachable || s.service.healthy)) return false;
+        if (statusFilter === "unreachable" && s?.reachable !== false) return false;
+      }
+      return true;
+    });
+
+    if (sort) {
+      const dirMul = sort.dir === "asc" ? 1 : -1;
+      out = [...out].sort((a, b) => {
+        const cmp =
+          sort.key === "name"
+            ? a.friendlyName.localeCompare(b.friendlyName)
+            : a.ipAddress.localeCompare(b.ipAddress, undefined, { numeric: true });
+        return cmp * dirMul;
+      });
+    } else {
+      out = [...out].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    }
+
+    return out;
+  }, [hosts, search, statusFilter, activeTags, sort, statusMap]);
+
   const summary = useMemo(() => {
     let online = 0;
     let healthy = 0;
@@ -87,6 +138,12 @@ export default function DashboardPage() {
     }
     return { total: hosts.length, online, healthy };
   }, [hosts, statusMap]);
+
+  function openSingleAction(host: Host, action: SshActionType) {
+    setActionType(action);
+    setActionHost(host);
+    setActionOpen(true);
+  }
 
   return (
     <main className="flex-1 flex flex-col px-6 lg:px-10 py-6 max-w-7xl w-full mx-auto">
@@ -106,13 +163,6 @@ export default function DashboardPage() {
           <Stat label="Online" value={summary.online} accent="green" />
           <Stat label="Healthy" value={summary.healthy} accent="green" />
           <button
-            onClick={() => void reload()}
-            className="p-2 rounded-md glass hover:bg-white/10 text-text-dim hover:text-text"
-            title="Refresh"
-          >
-            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-          </button>
-          <button
             onClick={() => {
               setPanelMode("create");
               setEditing(null);
@@ -126,18 +176,51 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      <Toolbar
+        search={search}
+        onSearchChange={setSearch}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        allTags={allTags}
+        activeTags={activeTags}
+        onToggleTag={(t) => {
+          setActiveTags((prev) => {
+            const next = new Set(prev);
+            if (next.has(t)) next.delete(t);
+            else next.add(t);
+            return next;
+          });
+        }}
+        onClearFilters={() => {
+          setSearch("");
+          setStatusFilter("all");
+          setActiveTags(new Set());
+        }}
+        totalShown={filtered.length}
+        totalAll={hosts.length}
+      />
+
       <HostsTable
-        hosts={hosts}
+        hosts={filtered}
         statuses={statusMap}
+        sort={sort}
+        onSortChange={setSort}
         onEdit={(h) => {
           setPanelMode("edit");
           setEditing(h);
           setPanelOpen(true);
         }}
         onDelete={async (h) => {
-          await deleteHost(h.id);
-          setHosts((prev) => prev.filter((p) => p.id !== h.id));
+          try {
+            await deleteHost(h.id);
+            setHosts((prev) => prev.filter((p) => p.id !== h.id));
+            toast.success(`Deleted ${h.friendlyName}`);
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : String(err));
+          }
         }}
+        onAction={openSingleAction}
+        onCopyConfig={(h) => setCopySource(h)}
       />
 
       <SidePanel
@@ -147,12 +230,18 @@ export default function DashboardPage() {
         onClose={() => setPanelOpen(false)}
       />
 
-      <footer className="mt-auto pt-8 text-xs text-text-dim text-center">
-        Backend:{" "}
-        <span className="font-mono">
-          {process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000"}
-        </span>
-      </footer>
+      <SshActionModal
+        open={actionOpen}
+        action={actionType}
+        host={actionHost}
+        onClose={() => setActionOpen(false)}
+      />
+
+      <CopyConfigModal
+        source={copySource}
+        hosts={hosts}
+        onClose={() => setCopySource(null)}
+      />
     </main>
   );
 }

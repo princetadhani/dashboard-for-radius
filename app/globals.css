@@ -27,16 +27,9 @@
 html,
 body {
   background-color: var(--bg);
+  background-image: none;
   color: var(--text);
   font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
-}
-
-body {
-  background-image:
-    linear-gradient(rgba(39, 44, 56, 0.35) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(39, 44, 56, 0.35) 1px, transparent 1px);
-  background-size: 40px 40px;
-  background-attachment: fixed;
 }
 
 .glass {
@@ -44,6 +37,21 @@ body {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border);
+}
+
+/* Opaque variant for modals / slide-in panels — same look but solid background. */
+.panel {
+  background: rgb(17, 21, 31);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+}
+
+/* Floating menus / popovers / dropdown lists. */
+.popover {
+  background: rgb(20, 25, 36);
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
 }
 
 @keyframes neon-pulse-green {
@@ -97,24 +105,26 @@ body {
   background: #4a5160;
 }
 
-.input {
-  width: 100%;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  color: var(--text);
-  font-size: 0.875rem;
-  outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.input:focus {
-  border-color: var(--neon-blue);
-  box-shadow: 0 0 0 3px rgba(51, 153, 255, 0.15);
-}
-.input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+@layer components {
+  .input {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    padding-block: 0.5rem;
+    padding-inline: 0.75rem;
+    color: var(--text);
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .input:focus {
+    border-color: var(--neon-blue);
+    box-shadow: 0 0 0 3px rgba(51, 153, 255, 0.15);
+  }
+  .input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 }
 
 ::-webkit-scrollbar {

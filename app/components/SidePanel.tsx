@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Loader2, CheckCircle2, XCircle } from "lucide-react";
-import type { Host, ProvisionDone, ProvisionLog } from "../lib/types";
+import { X, Loader2, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
+import type { Host, ProvisionDone, ProvisionLog, ProvisionStep } from "../lib/types";
 import { createHost, updateHost } from "../lib/api";
 import { getSocket } from "../lib/socket";
+import { TagInput } from "./TagInput";
+import { Stepper } from "./Stepper";
+import { PasswordInput } from "./PasswordInput";
 
 type Props = {
   open: boolean;
@@ -19,7 +23,7 @@ type Phase = "idle" | "provisioning" | "success" | "error";
 export function SidePanel({ open, mode, editing, onClose }: Props) {
   const [friendlyName, setFriendlyName] = useState("");
   const [ipAddress, setIpAddress] = useState("");
-  const [port, setPort] = useState(9000);
+  const [tags, setTags] = useState<string[]>([]);
   const [sshPort, setSshPort] = useState(22);
   const [sshUsername, setSshUsername] = useState("");
   const [sshPassword, setSshPassword] = useState("");
@@ -27,7 +31,7 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [logs, setLogs] = useState<ProvisionLog[]>([]);
-  const logEndRef = useRef<HTMLDivElement>(null);
+  const [steps, setSteps] = useState<ProvisionStep[]>([]);
 
   // Reset / hydrate when panel opens or mode/editing changes
   useEffect(() => {
@@ -35,11 +39,11 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
     if (mode === "edit" && editing) {
       setFriendlyName(editing.friendlyName);
       setIpAddress(editing.ipAddress);
-      setPort(editing.port);
+      setTags(editing.tags ?? []);
     } else {
       setFriendlyName("");
       setIpAddress("");
-      setPort(9000);
+      setTags([]);
       setSshPort(22);
       setSshUsername("");
       setSshPassword("");
@@ -47,12 +51,8 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
     setPhase("idle");
     setErrorMsg(null);
     setLogs([]);
+    setSteps([]);
   }, [open, mode, editing]);
-
-  // Auto-scroll terminal
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -60,22 +60,27 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
 
     if (mode === "edit" && editing) {
       try {
-        await updateHost(editing.id, { friendlyName, ipAddress, port });
+        await updateHost(editing.id, { friendlyName, ipAddress, tags });
+        toast.success(`Updated ${friendlyName}`);
         onClose();
       } catch (err) {
-        setErrorMsg(err instanceof Error ? err.message : String(err));
+        const msg = err instanceof Error ? err.message : String(err);
+        setErrorMsg(msg);
+        toast.error(`Update failed: ${msg}`);
       }
       return;
     }
 
     setPhase("provisioning");
     setLogs([]);
+    setSteps([]);
 
     try {
       const { sessionId } = await createHost({
         friendlyName,
         ipAddress,
-        port,
+        port: 9000,
+        tags,
         sshPort,
         sshUsername,
         sshPassword,
@@ -87,9 +92,18 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
       const socket = getSocket();
       socket.emit("provision:subscribe", sessionId);
 
-      const onLog = (log: ProvisionLog) => setLogs((prev) => [...prev, log]);
+      const onLog = (log: ProvisionLog) => {
+        if (log.sessionId && log.sessionId !== sessionId) return;
+        setLogs((prev) => [...prev, log]);
+      };
+      const onStep = (step: ProvisionStep) => {
+        if (step.sessionId && step.sessionId !== sessionId) return;
+        setSteps((prev) => [...prev, step]);
+      };
       const onDone = (result: ProvisionDone) => {
+        if (result.sessionId && result.sessionId !== sessionId) return;
         socket.off("provision:log", onLog);
+        socket.off("provision:step", onStep);
         socket.off("provision:done", onDone);
         socket.emit("provision:unsubscribe", sessionId);
         if (result.success) {
@@ -101,6 +115,7 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
         }
       };
       socket.on("provision:log", onLog);
+      socket.on("provision:step", onStep);
       socket.on("provision:done", onDone);
     } catch (err) {
       setPhase("error");
@@ -120,7 +135,7 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
             onClick={phase === "provisioning" ? undefined : onClose}
           />
           <motion.aside
-            className="fixed right-0 top-0 bottom-0 w-full max-w-xl glass z-50 flex flex-col"
+            className="fixed right-0 top-0 bottom-0 w-full max-w-xl panel z-50 flex flex-col shadow-2xl"
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
@@ -147,32 +162,28 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
                   onChange={(e) => setFriendlyName(e.target.value)}
                   disabled={phase === "provisioning"}
                   placeholder="My Lab Radius"
-                  className="input"
+                  className="input w-full"
                 />
               </Field>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="IP Address">
-                  <input
-                    required
-                    value={ipAddress}
-                    onChange={(e) => setIpAddress(e.target.value)}
-                    disabled={phase === "provisioning"}
-                    placeholder="10.76.191.233"
-                    className="input font-mono"
-                  />
-                </Field>
-                <Field label="Service Port">
-                  <input
-                    required
-                    type="number"
-                    value={port}
-                    onChange={(e) => setPort(Number(e.target.value))}
-                    disabled={phase === "provisioning"}
-                    className="input font-mono"
-                  />
-                </Field>
-              </div>
+              <Field label="IP Address">
+                <input
+                  required
+                  value={ipAddress}
+                  onChange={(e) => setIpAddress(e.target.value)}
+                  disabled={phase === "provisioning"}
+                  placeholder="10.76.191.233"
+                  className="input w-full font-mono"
+                />
+              </Field>
+
+              <Field label="Tags (optional)">
+                <TagInput
+                  value={tags}
+                  onChange={setTags}
+                  disabled={phase === "provisioning"}
+                />
+              </Field>
 
               {mode === "create" && (
                 <>
@@ -199,28 +210,19 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
                       disabled={phase === "provisioning"}
                       placeholder="ubuntu"
                       autoComplete="off"
-                      className="input"
+                      className="input w-full"
                     />
                   </Field>
                   <Field label="SSH Password">
-                    <input
+                    <PasswordInput
                       required
-                      type="password"
                       value={sshPassword}
                       onChange={(e) => setSshPassword(e.target.value)}
                       disabled={phase === "provisioning"}
                       autoComplete="new-password"
-                      className="input"
                     />
                   </Field>
                 </>
-              )}
-
-              {errorMsg && (
-                <div className="rounded-md border border-neon-red/40 bg-neon-red/10 px-3 py-2 text-sm text-neon-red flex items-start gap-2">
-                  <XCircle size={16} className="mt-0.5 shrink-0" />
-                  <span>{errorMsg}</span>
-                </div>
               )}
 
               {phase === "success" && (
@@ -230,24 +232,19 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
                 </div>
               )}
 
-              {logs.length > 0 && (
-                <div className="rounded-md border border-border bg-black/40 p-3 max-h-64 overflow-y-auto font-mono text-xs">
-                  {logs.map((l, i) => (
-                    <div
-                      key={i}
-                      className={
-                        l.level === "stderr"
-                          ? "text-neon-red"
-                          : l.level === "system"
-                            ? "text-neon-blue"
-                            : "text-text"
-                      }
-                    >
-                      {l.line}
-                    </div>
-                  ))}
-                  <div ref={logEndRef} />
-                </div>
+              {(phase === "provisioning" || phase === "success" || phase === "error") && (
+                <Stepper
+                  steps={steps}
+                  logs={logs}
+                  status={
+                    phase === "provisioning"
+                      ? "running"
+                      : phase === "success"
+                        ? "success"
+                        : "error"
+                  }
+                  errorMsg={errorMsg}
+                />
               )}
             </form>
 

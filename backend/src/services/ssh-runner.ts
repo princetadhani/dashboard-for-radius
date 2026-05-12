@@ -1,0 +1,127 @@
+import { Client } from 'ssh2';
+import type { Server as IOServer } from 'socket.io';
+import { env } from '../lib/env.js';
+import { makeEmitter } from '../lib/provision-emit.js';
+
+export type SshCreds = {
+  ipAddress: string;
+  sshPort: number;
+  sshUsername: string;
+  sshPassword: string;
+};
+
+export type CommandResult = { success: true } | { success: false; error: string };
+
+export type RunOptions = {
+  /** Shell command to execute on the remote host. Caller is responsible for quoting. */
+  command: string;
+  /** Total wall-clock timeout for the whole exec (ms). */
+  timeoutMs?: number;
+};
+
+/**
+ * Connects via SSH, runs `command` over a pty, streams stdout/stderr
+ * to the given Socket.io room, and answers our custom `SUDOPW:` sudo
+ * prompt with the password. Credentials live only in this closure.
+ */
+export async function runSshCommand(
+  io: IOServer,
+  room: string,
+  creds: SshCreds,
+  opts: RunOptions,
+): Promise<CommandResult> {
+  const { ipAddress, sshPort, sshUsername, sshPassword } = creds;
+  const timeoutMs = opts.timeoutMs ?? env.sshInstallTimeoutMs;
+  const { emitLog: emit, handleLine } = makeEmitter(io, room);
+
+  return await new Promise<CommandResult>((resolve) => {
+    const conn = new Client();
+    let resolved = false;
+    const finish = (r: CommandResult) => {
+      if (resolved) return;
+      resolved = true;
+      try {
+        conn.end();
+      } catch {}
+      resolve(r);
+    };
+
+    const timeout = setTimeout(() => {
+      emit(`SSH command timed out after ${timeoutMs / 1000}s`, 'system');
+      finish({ success: false, error: 'SSH command timed out' });
+    }, timeoutMs);
+
+    conn.on('ready', () => {
+      emit(`SSH connection established to ${ipAddress}:${sshPort}`, 'system');
+
+      conn.exec(opts.command, { pty: true }, (err, stream) => {
+        if (err) {
+          clearTimeout(timeout);
+          emit(`exec error: ${err.message}`, 'stderr');
+          return finish({ success: false, error: err.message });
+        }
+
+        let sudoAttempts = 0;
+        const MAX_SUDO_ATTEMPTS = 3;
+
+        stream.on('data', (data: Buffer) => {
+          const text = data.toString('utf8');
+          if (text.includes('SUDOPW:')) {
+            sudoAttempts++;
+            if (sudoAttempts > MAX_SUDO_ATTEMPTS) {
+              emit('sudo refused password (max attempts reached)', 'stderr');
+              return;
+            }
+            stream.write(`${sshPassword}\n`);
+            const rest = text.replace(/SUDOPW:\s*/g, '');
+            for (const line of rest.split(/\r?\n/)) handleLine(line, 'info');
+            return;
+          }
+          for (const line of text.split(/\r?\n/)) handleLine(line, 'info');
+        });
+
+        stream.stderr.on('data', (data: Buffer) => {
+          const text = data.toString('utf8');
+          for (const line of text.split(/\r?\n/)) handleLine(line, 'stderr');
+        });
+
+        stream.on('close', (code: number | null) => {
+          clearTimeout(timeout);
+          if (code === 0) {
+            emit('Command completed successfully', 'system');
+            finish({ success: true });
+          } else {
+            emit(`Command exited with code ${code}`, 'stderr');
+            finish({ success: false, error: `command exited with code ${code}` });
+          }
+        });
+      });
+    });
+
+    conn.on('error', (e) => {
+      clearTimeout(timeout);
+      emit(`SSH error: ${e.message}`, 'stderr');
+      finish({ success: false, error: e.message });
+    });
+
+    emit(`Connecting to ${ipAddress}:${sshPort} as ${sshUsername}...`, 'system');
+    conn.connect({
+      host: ipAddress,
+      port: sshPort,
+      username: sshUsername,
+      password: sshPassword,
+      readyTimeout: 20_000,
+      algorithms: undefined,
+    });
+  });
+}
+
+/** Build the sudo command that pipes-to-bash a script URL. */
+export function installScriptCommand(scriptUrl: string): string {
+  return `sudo -p 'SUDOPW:' bash -c "curl -sSL '${scriptUrl}' | bash"`;
+}
+
+/** Build a sudo systemctl command. */
+export function systemctlCommand(action: 'restart' | 'start' | 'stop' | 'status', unit: string): string {
+  return `sudo -p 'SUDOPW:' systemctl ${action} ${unit}`;
+}
