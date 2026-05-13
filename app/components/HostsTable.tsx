@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ExternalLink,
   Pencil,
@@ -25,13 +26,13 @@ export type SortState = { key: SortKey; dir: "asc" | "desc" } | null;
 type ColKey = "name" | "endpoint" | "tags" | "host" | "service" | "lastSync" | "actions";
 
 const DEFAULT_WIDTHS: Record<ColKey, number> = {
-  name: 240,
-  endpoint: 200,
+  name: 200,
+  endpoint: 180,
   tags: 200,
   host: 70,
   service: 70,
   lastSync: 150,
-  actions: 180,
+  actions: 150,
 };
 
 const MIN_WIDTHS: Record<ColKey, number> = {
@@ -41,11 +42,14 @@ const MIN_WIDTHS: Record<ColKey, number> = {
   host: 60,
   service: 60,
   lastSync: 120,
-  actions: 160,
+  actions: 150,
 };
 
-// Columns that cannot be resized
-const FIXED_COLS: ColKey[] = ["host", "service", "actions"];
+// Columns that cannot be resized — name/endpoint flex to fill remaining space
+const FIXED_COLS: ColKey[] = ["name", "endpoint", "host", "service", "actions"];
+
+// Columns that auto-stretch to absorb remaining horizontal space
+const FLEX_COLS: ColKey[] = ["name", "endpoint"];
 
 type Props = {
   hosts: Host[];
@@ -89,7 +93,9 @@ export function HostsTable({
 }: Props) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number; placement: "down" | "up" } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   const [colWidths, setColWidths] = useState<Record<ColKey, number>>(DEFAULT_WIDTHS);
   const dragRef = useRef<{ col: ColKey; startX: number; startWidth: number } | null>(null);
@@ -125,12 +131,47 @@ export function HostsTable({
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const trigger = menuOpenId ? menuTriggerRefs.current.get(menuOpenId) : null;
+      if (menuRef.current && !menuRef.current.contains(target) && (!trigger || !trigger.contains(target))) {
         setMenuOpenId(null);
+        setMenuPos(null);
       }
     }
-    if (menuOpenId) document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    function handleScrollOrResize() {
+      setMenuOpenId(null);
+      setMenuPos(null);
+    }
+    if (menuOpenId) {
+      document.addEventListener("mousedown", handleClick);
+      window.addEventListener("scroll", handleScrollOrResize, true);
+      window.addEventListener("resize", handleScrollOrResize);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize);
+    };
+  }, [menuOpenId]);
+
+  const openMenu = useCallback((id: string) => {
+    if (menuOpenId === id) {
+      setMenuOpenId(null);
+      setMenuPos(null);
+      return;
+    }
+    const trigger = menuTriggerRefs.current.get(id);
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const menuHeight = 140;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const placement: "down" | "up" = spaceBelow < menuHeight + 16 ? "up" : "down";
+    setMenuPos({
+      top: placement === "down" ? rect.bottom + 4 : rect.top - 4,
+      right: window.innerWidth - rect.right,
+      placement,
+    });
+    setMenuOpenId(id);
   }, [menuOpenId]);
 
   function handleSortClick(key: SortKey) {
@@ -167,17 +208,22 @@ export function HostsTable({
 
   const w = colWidths;
 
+  const totalWidth = Object.values(w).reduce((a, b) => a + b, 0);
+
+  const colStyle = (col: ColKey): React.CSSProperties =>
+    FLEX_COLS.includes(col) ? {} : { width: w[col] };
+
   return (
     <div className="glass rounded-xl overflow-x-auto">
-      <table className="text-sm table-fixed" style={{ width: Object.values(w).reduce((a, b) => a + b, 0) }}>
+      <table className="text-sm table-fixed w-full" style={{ minWidth: totalWidth }}>
         <colgroup>
-          <col style={{ width: w.name }} />
-          <col style={{ width: w.endpoint }} />
-          <col style={{ width: w.tags }} />
-          <col style={{ width: w.host }} />
-          <col style={{ width: w.service }} />
-          <col style={{ width: w.lastSync }} />
-          <col style={{ width: w.actions }} />
+          <col style={colStyle("name")} />
+          <col style={colStyle("endpoint")} />
+          <col style={colStyle("tags")} />
+          <col style={colStyle("host")} />
+          <col style={colStyle("service")} />
+          <col style={colStyle("lastSync")} />
+          <col style={colStyle("actions")} />
         </colgroup>
         <thead>
           <tr className="border-b border-border text-text-dim text-left text-xs uppercase tracking-wider">
@@ -205,7 +251,7 @@ export function HostsTable({
               Last Sync
               <ResizeHandle col="lastSync" />
             </th>
-            <th className="px-4 py-3 font-medium text-right">Actions</th>
+            <th className="px-4 py-3 font-medium text-left">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -271,7 +317,7 @@ export function HostsTable({
                 </td>
                 <td className="px-2 py-3">
                   {isConfirming ? (
-                    <div className="flex items-center justify-end gap-1.5">
+                    <div className="flex items-center gap-1.5">
                       <span className="text-xs text-text-dim mr-1">Delete?</span>
                       <button
                         onClick={() => { onDelete(h); setConfirmId(null); }}
@@ -287,7 +333,7 @@ export function HostsTable({
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="flex items-center justify-start gap-1">
                       <a
                         href={launchUrl}
                         target="_blank"
@@ -304,35 +350,17 @@ export function HostsTable({
                       >
                         <Pencil size={16} />
                       </button>
-                      <div className="relative" ref={menuOpenId === h.id ? menuRef : null}>
-                        <button
-                          onClick={() => setMenuOpenId(menuOpenId === h.id ? null : h.id)}
-                          className="p-2 rounded-md hover:bg-white/10 text-text-dim hover:text-text transition-colors"
-                          title="More actions"
-                        >
-                          <MoreVertical size={16} />
-                        </button>
-                        {menuOpenId === h.id && (
-                          <div className="absolute right-0 top-full mt-1 z-30 w-56 popover rounded-md py-1">
-                            <MenuItem
-                              icon={<RotateCcw size={14} />}
-                              label="Restart FreeRADIUS"
-                              onClick={() => { onAction(h, "restart-service"); setMenuOpenId(null); }}
-                            />
-                            <MenuItem
-                              icon={<RefreshCw size={14} />}
-                              label="Reinstall / Repair"
-                              onClick={() => { onAction(h, "reinstall"); setMenuOpenId(null); }}
-                            />
-                            <div className="border-t border-border my-1" />
-                            <MenuItem
-                              icon={<Copy size={14} />}
-                              label="Copy config to another host..."
-                              onClick={() => { onCopyConfig(h); setMenuOpenId(null); }}
-                            />
-                          </div>
-                        )}
-                      </div>
+                      <button
+                        ref={(el) => {
+                          if (el) menuTriggerRefs.current.set(h.id, el);
+                          else menuTriggerRefs.current.delete(h.id);
+                        }}
+                        onClick={() => openMenu(h.id)}
+                        className="p-2 rounded-md hover:bg-white/10 text-text-dim hover:text-text transition-colors"
+                        title="More actions"
+                      >
+                        <MoreVertical size={16} />
+                      </button>
                       <button
                         onClick={() => setConfirmId(h.id)}
                         className="p-2 rounded-md hover:bg-white/10 text-text-dim hover:text-neon-red transition-colors"
@@ -348,6 +376,41 @@ export function HostsTable({
           })}
         </tbody>
       </table>
+      {menuOpenId && menuPos && typeof document !== "undefined" && createPortal(
+        (() => {
+          const host = hosts.find((h) => h.id === menuOpenId);
+          if (!host) return null;
+          const style: React.CSSProperties = {
+            position: "fixed",
+            right: menuPos.right,
+            ...(menuPos.placement === "down"
+              ? { top: menuPos.top }
+              : { bottom: window.innerHeight - menuPos.top }),
+            zIndex: 50,
+          };
+          return (
+            <div ref={menuRef} style={style} className="w-56 popover rounded-md py-1">
+              <MenuItem
+                icon={<RotateCcw size={14} />}
+                label="Restart FreeRADIUS"
+                onClick={() => { onAction(host, "restart-service"); setMenuOpenId(null); setMenuPos(null); }}
+              />
+              <MenuItem
+                icon={<RefreshCw size={14} />}
+                label="Reinstall / Repair"
+                onClick={() => { onAction(host, "reinstall"); setMenuOpenId(null); setMenuPos(null); }}
+              />
+              <div className="border-t border-border my-1" />
+              <MenuItem
+                icon={<Copy size={14} />}
+                label="Copy config to another host..."
+                onClick={() => { onCopyConfig(host); setMenuOpenId(null); setMenuPos(null); }}
+              />
+            </div>
+          );
+        })(),
+        document.body
+      )}
     </div>
   );
 }
