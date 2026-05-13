@@ -10,6 +10,7 @@ import { getSocket } from "../lib/socket";
 import { TagInput } from "./TagInput";
 import { Stepper } from "./Stepper";
 import { PasswordInput } from "./PasswordInput";
+import { validateHostnameOptional, validateIPv4 } from "../lib/validation";
 
 type Props = {
   open: boolean;
@@ -23,6 +24,7 @@ type Phase = "idle" | "provisioning" | "success" | "error";
 export function SidePanel({ open, mode, editing, onClose }: Props) {
   const [friendlyName, setFriendlyName] = useState("");
   const [ipAddress, setIpAddress] = useState("");
+  const [hostname, setHostname] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [sshPort, setSshPort] = useState(22);
   const [sshUsername, setSshUsername] = useState("");
@@ -39,10 +41,12 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
     if (mode === "edit" && editing) {
       setFriendlyName(editing.friendlyName);
       setIpAddress(editing.ipAddress);
+      setHostname(editing.hostname ?? "");
       setTags(editing.tags ?? []);
     } else {
       setFriendlyName("");
       setIpAddress("");
+      setHostname("");
       setTags([]);
       setSshPort(22);
       setSshUsername("");
@@ -54,13 +58,22 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
     setSteps([]);
   }, [open, mode, editing]);
 
+  const ipError = ipAddress ? validateIPv4(ipAddress) : null;
+  const hostnameError = validateHostnameOptional(hostname);
+  const formInvalid = !!ipError || !!hostnameError || !ipAddress.trim() || !friendlyName.trim();
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg(null);
 
     if (mode === "edit" && editing) {
       try {
-        await updateHost(editing.id, { friendlyName, ipAddress, tags });
+        await updateHost(editing.id, {
+          friendlyName,
+          ipAddress,
+          hostname: hostname.trim() || null,
+          tags,
+        });
         toast.success(`Updated ${friendlyName}`);
         onClose();
       } catch (err) {
@@ -79,6 +92,7 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
       const { sessionId } = await createHost({
         friendlyName,
         ipAddress,
+        hostname: hostname.trim() || null,
         port: 9000,
         tags,
         sshPort,
@@ -155,7 +169,7 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
             </header>
 
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-              <Field label="Friendly Name">
+              <Field label="Friendly Name" required>
                 <input
                   required
                   value={friendlyName}
@@ -166,18 +180,34 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
                 />
               </Field>
 
-              <Field label="IP Address">
+              <Field label="IP Address" required error={ipError}>
                 <input
                   required
                   value={ipAddress}
                   onChange={(e) => setIpAddress(e.target.value)}
                   disabled={phase === "provisioning"}
                   placeholder="10.76.191.233"
-                  className="input w-full font-mono"
+                  aria-invalid={!!ipError}
+                  className={`input w-full font-mono ${
+                    ipError ? "!border-neon-red focus:!border-neon-red" : ""
+                  }`}
                 />
               </Field>
 
-              <Field label="Tags (optional)">
+              <Field label="Hostname" error={hostnameError}>
+                <input
+                  value={hostname}
+                  onChange={(e) => setHostname(e.target.value)}
+                  disabled={phase === "provisioning"}
+                  placeholder="radius.lab.example.com"
+                  aria-invalid={!!hostnameError}
+                  className={`input w-full font-mono ${
+                    hostnameError ? "!border-neon-red focus:!border-neon-red" : ""
+                  }`}
+                />
+              </Field>
+
+              <Field label="Tags">
                 <TagInput
                   value={tags}
                   onChange={setTags}
@@ -192,7 +222,7 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
                       SSH Credentials (used once, never stored)
                     </h3>
                   </div>
-                  <Field label="SSH Port">
+                  <Field label="SSH Port" required>
                     <input
                       required
                       type="number"
@@ -202,7 +232,7 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
                       className="input font-mono w-32"
                     />
                   </Field>
-                  <Field label="SSH Username (with sudo)">
+                  <Field label="SSH Username (with sudo)" required>
                     <input
                       required
                       value={sshUsername}
@@ -213,7 +243,7 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
                       className="input w-full"
                     />
                   </Field>
-                  <Field label="SSH Password">
+                  <Field label="SSH Password" required>
                     <PasswordInput
                       required
                       value={sshPassword}
@@ -260,7 +290,7 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
               <button
                 type="submit"
                 onClick={handleSubmit}
-                disabled={phase === "provisioning"}
+                disabled={phase === "provisioning" || formInvalid}
                 className="px-4 py-2 rounded-md bg-neon-blue/20 border border-neon-blue/50 text-neon-blue hover:bg-neon-blue/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {phase === "provisioning" && <Loader2 size={16} className="animate-spin" />}
@@ -278,13 +308,25 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  required,
+  error,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  error?: string | null;
+  children: React.ReactNode;
+}) {
   return (
     <label className="block">
       <span className="block text-xs uppercase tracking-wider text-text-dim mb-1.5">
         {label}
+        {required && <span className="text-neon-red ml-0.5">*</span>}
       </span>
       {children}
+      {error && <span className="block text-xs text-neon-red mt-1">{error}</span>}
     </label>
   );
 }

@@ -18,6 +18,7 @@ import {
 import type { Host, HostStatusUpdate, SshActionType } from "../lib/types";
 import { StatusDot } from "./StatusDot";
 import { TagList } from "./TagChips";
+import { CopyText } from "./CopyText";
 
 export type SortKey = "name" | "ip";
 export type SortState = { key: SortKey; dir: "asc" | "desc" } | null;
@@ -133,9 +134,23 @@ export function HostsTable({
                   <div className="font-medium truncate" title={h.friendlyName}>
                     {h.friendlyName}
                   </div>
+                  {h.hostname && (
+                    <div className="mt-0.5 min-w-0 flex">
+                      <CopyText
+                        value={h.hostname}
+                        label="Copy hostname"
+                        textClassName="font-mono text-[11px] text-text-dim"
+                      >
+                        {h.hostname}
+                      </CopyText>
+                    </div>
+                  )}
                 </td>
                 <td className="px-4 py-3 font-mono text-text-dim whitespace-nowrap">
-                  {h.ipAddress}:{h.port}
+                  <CopyText value={h.ipAddress} label="Copy IP">
+                    {h.ipAddress}
+                    <span className="text-text-dim/60">:{h.port}</span>
+                  </CopyText>
                 </td>
                 <td className="px-4 py-3 overflow-hidden">
                   <TagList tags={h.tags} />

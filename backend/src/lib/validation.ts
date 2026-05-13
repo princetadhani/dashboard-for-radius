@@ -7,6 +7,16 @@ const ipv4 = z
     'Must be a valid IPv4 address',
   );
 
+const hostname = z
+  .string()
+  .trim()
+  .min(1)
+  .max(253)
+  .regex(
+    /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/,
+    'Must be a valid hostname',
+  );
+
 const tag = z
   .string()
   .trim()
@@ -19,6 +29,7 @@ const tagsArray = z.array(tag).max(20).optional().default([]);
 export const createHostSchema = z.object({
   friendlyName: z.string().trim().min(1).max(64),
   ipAddress: ipv4,
+  hostname: hostname.optional().nullable(),
   port: z.number().int().min(1).max(65535).optional().default(9000),
   tags: tagsArray,
   sshPort: z.number().int().min(1).max(65535).optional().default(22),
@@ -29,6 +40,7 @@ export const createHostSchema = z.object({
 export const updateHostSchema = z.object({
   friendlyName: z.string().trim().min(1).max(64).optional(),
   ipAddress: ipv4.optional(),
+  hostname: hostname.optional().nullable(),
   port: z.number().int().min(1).max(65535).optional(),
   tags: z.array(tag).max(20).optional(),
 });

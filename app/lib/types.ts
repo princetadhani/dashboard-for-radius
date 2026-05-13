@@ -2,6 +2,7 @@ export type Host = {
   id: string;
   friendlyName: string;
   ipAddress: string;
+  hostname?: string | null;
   port: number;
   tags: string[];
   createdAt: string;
