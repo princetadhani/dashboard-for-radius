@@ -228,6 +228,7 @@ export default function DashboardPage() {
         mode={panelMode}
         editing={editing}
         onClose={() => setPanelOpen(false)}
+        onSuccess={reload}
       />
 
       <SshActionModal

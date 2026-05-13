@@ -14,7 +14,7 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RADIUSCTRL — FreeRADIUS Fleet Dashboard",
+  title: "Dashboard - RADIUSCTRL",
   description: "Provision, monitor, and manage your FreeRADIUS servers.",
 };
 

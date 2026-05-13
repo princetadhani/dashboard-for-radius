@@ -17,11 +17,12 @@ type Props = {
   mode: "create" | "edit";
   editing: Host | null;
   onClose: () => void;
+  onSuccess?: () => void;
 };
 
 type Phase = "idle" | "provisioning" | "success" | "error";
 
-export function SidePanel({ open, mode, editing, onClose }: Props) {
+export function SidePanel({ open, mode, editing, onClose, onSuccess }: Props) {
   const [friendlyName, setFriendlyName] = useState("");
   const [ipAddress, setIpAddress] = useState("");
   const [tags, setTags] = useState<string[]>([]);
@@ -70,6 +71,7 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
           tags,
         });
         toast.success(`Updated ${friendlyName}`);
+        onSuccess?.();
         onClose();
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -116,7 +118,7 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
         socket.emit("provision:unsubscribe", sessionId);
         if (result.success) {
           setPhase("success");
-          setTimeout(() => onClose(), 1800);
+          setTimeout(() => { onSuccess?.(); onClose(); }, 1800);
         } else {
           setPhase("error");
           setErrorMsg(result.error);
