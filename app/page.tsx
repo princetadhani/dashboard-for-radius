@@ -146,7 +146,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="flex-1 flex flex-col px-6 lg:px-10 py-6 max-w-7xl w-full mx-auto">
+    <main className="flex-1 flex flex-col px-6 lg:px-10 py-6 w-full">
       <header className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg glass flex items-center justify-center">

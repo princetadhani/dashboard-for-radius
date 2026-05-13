@@ -45,10 +45,10 @@ const MIN_WIDTHS: Record<ColKey, number> = {
   actions: 150,
 };
 
-// Columns that cannot be resized — name/endpoint flex to fill remaining space
-const FIXED_COLS: ColKey[] = ["name", "endpoint", "host", "service", "actions"];
+// Columns that cannot be resized
+const FIXED_COLS: ColKey[] = ["host", "service", "actions"];
 
-// Columns that auto-stretch to absorb remaining horizontal space
+// Columns that auto-stretch to absorb remaining horizontal space (until user resizes them)
 const FLEX_COLS: ColKey[] = ["name", "endpoint"];
 
 type Props = {
@@ -98,11 +98,21 @@ export function HostsTable({
   const menuTriggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   const [colWidths, setColWidths] = useState<Record<ColKey, number>>(DEFAULT_WIDTHS);
-  const dragRef = useRef<{ col: ColKey; startX: number; startWidth: number } | null>(null);
+  const [resizedCols, setResizedCols] = useState<Set<ColKey>>(new Set());
+  const dragRef = useRef<{ col: ColKey; startX: number; startWidth: number; thEl: HTMLElement | null } | null>(null);
 
   const startResize = useCallback((col: ColKey, e: React.MouseEvent) => {
     e.preventDefault();
-    dragRef.current = { col, startX: e.clientX, startWidth: colWidths[col] };
+    const thEl = (e.currentTarget as HTMLElement).closest("th") as HTMLElement | null;
+    const startWidth = thEl?.getBoundingClientRect().width ?? colWidths[col];
+    dragRef.current = { col, startX: e.clientX, startWidth, thEl };
+    setResizedCols((prev) => {
+      if (prev.has(col)) return prev;
+      const next = new Set(prev);
+      next.add(col);
+      return next;
+    });
+    setColWidths((prev) => ({ ...prev, [col]: startWidth }));
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
   }, [colWidths]);
@@ -211,7 +221,7 @@ export function HostsTable({
   const totalWidth = Object.values(w).reduce((a, b) => a + b, 0);
 
   const colStyle = (col: ColKey): React.CSSProperties =>
-    FLEX_COLS.includes(col) ? {} : { width: w[col] };
+    FLEX_COLS.includes(col) && !resizedCols.has(col) ? {} : { width: w[col] };
 
   return (
     <div className="glass rounded-xl overflow-x-auto">
