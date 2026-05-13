@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ExternalLink,
   Pencil,
@@ -22,6 +22,31 @@ import { CopyText } from "./CopyText";
 export type SortKey = "name" | "ip";
 export type SortState = { key: SortKey; dir: "asc" | "desc" } | null;
 
+type ColKey = "name" | "endpoint" | "tags" | "host" | "service" | "lastSync" | "actions";
+
+const DEFAULT_WIDTHS: Record<ColKey, number> = {
+  name: 240,
+  endpoint: 200,
+  tags: 200,
+  host: 70,
+  service: 70,
+  lastSync: 150,
+  actions: 180,
+};
+
+const MIN_WIDTHS: Record<ColKey, number> = {
+  name: 120,
+  endpoint: 120,
+  tags: 80,
+  host: 60,
+  service: 60,
+  lastSync: 120,
+  actions: 160,
+};
+
+// Columns that cannot be resized
+const FIXED_COLS: ColKey[] = ["host", "service", "actions"];
+
 type Props = {
   hosts: Host[];
   statuses: Map<string, HostStatusUpdate>;
@@ -42,10 +67,7 @@ function formatMem(bytes?: number): string {
 function formatTs(ts?: number): string {
   if (!ts) return "never";
   const d = new Date(ts);
-  const date = d.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
+  const date = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   const time = d.toLocaleTimeString(undefined, {
     hour: "2-digit",
     minute: "2-digit",
@@ -68,6 +90,38 @@ export function HostsTable({
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const [colWidths, setColWidths] = useState<Record<ColKey, number>>(DEFAULT_WIDTHS);
+  const dragRef = useRef<{ col: ColKey; startX: number; startWidth: number } | null>(null);
+
+  const startResize = useCallback((col: ColKey, e: React.MouseEvent) => {
+    e.preventDefault();
+    dragRef.current = { col, startX: e.clientX, startWidth: colWidths[col] };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, [colWidths]);
+
+  useEffect(() => {
+    function onMouseMove(e: MouseEvent) {
+      if (!dragRef.current) return;
+      const { col, startX, startWidth } = dragRef.current;
+      const delta = e.clientX - startX;
+      const next = Math.max(MIN_WIDTHS[col], startWidth + delta);
+      setColWidths((prev) => ({ ...prev, [col]: next }));
+    }
+    function onMouseUp() {
+      if (!dragRef.current) return;
+      dragRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -99,9 +153,32 @@ export function HostsTable({
     );
   }
 
+  function ResizeHandle({ col }: { col: ColKey }) {
+    if (FIXED_COLS.includes(col)) return null;
+    return (
+      <div
+        onMouseDown={(e) => startResize(col, e)}
+        className="absolute right-0 top-0 bottom-0 w-4 flex items-center justify-center cursor-col-resize group/handle z-10"
+      >
+        <div className="w-px h-4 bg-border group-hover/handle:bg-neon-blue/60 group-hover/handle:h-full transition-all" />
+      </div>
+    );
+  }
+
+  const w = colWidths;
+
   return (
-    <div className="glass rounded-xl overflow-visible">
-      <table className="w-full text-sm table-fixed">
+    <div className="glass rounded-xl overflow-x-auto">
+      <table className="text-sm table-fixed" style={{ width: Object.values(w).reduce((a, b) => a + b, 0) }}>
+        <colgroup>
+          <col style={{ width: w.name }} />
+          <col style={{ width: w.endpoint }} />
+          <col style={{ width: w.tags }} />
+          <col style={{ width: w.host }} />
+          <col style={{ width: w.service }} />
+          <col style={{ width: w.lastSync }} />
+          <col style={{ width: w.actions }} />
+        </colgroup>
         <thead>
           <tr className="border-b border-border text-text-dim text-left text-xs uppercase tracking-wider">
             <SortableTh
@@ -109,20 +186,26 @@ export function HostsTable({
               sortKey="name"
               currentSort={sort}
               onClick={handleSortClick}
-              className="w-[26%]"
+              resizeHandle={<ResizeHandle col="name" />}
             />
             <SortableTh
               label="Endpoint"
               sortKey="ip"
               currentSort={sort}
               onClick={handleSortClick}
-              className="w-[20%]"
+              resizeHandle={<ResizeHandle col="endpoint" />}
             />
-            <th className="px-4 py-3 font-medium w-[22%]">Tags</th>
-            <th className="px-4 py-3 font-medium text-center w-[70px]">Host</th>
-            <th className="px-4 py-3 font-medium text-center w-[70px]">Service</th>
-            <th className="px-4 py-3 font-medium w-[150px]">Last Sync</th>
-            <th className="px-4 py-3 font-medium text-right w-[180px]">Actions</th>
+            <th className="px-4 py-3 font-medium relative">
+              Tags
+              <ResizeHandle col="tags" />
+            </th>
+            <th className="px-4 py-3 font-medium text-center relative">Host</th>
+            <th className="px-4 py-3 font-medium text-center relative">Service</th>
+            <th className="px-4 py-3 font-medium relative">
+              Last Sync
+              <ResizeHandle col="lastSync" />
+            </th>
+            <th className="px-4 py-3 font-medium text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -144,11 +227,7 @@ export function HostsTable({
                 </td>
                 <td className="px-4 py-3 font-mono text-text-dim">
                   <div className="flex min-w-0">
-                    <CopyText
-                      value={h.ipAddress}
-                      label="Copy address"
-                      className="min-w-0"
-                    >
+                    <CopyText value={h.ipAddress} label="Copy address" className="min-w-0">
                       {h.ipAddress}
                     </CopyText>
                   </div>
@@ -185,12 +264,8 @@ export function HostsTable({
                   </div>
                 </td>
                 <td
-                  className="px-4 py-3 text-text-dim text-xs whitespace-nowrap"
-                  title={
-                    s?.service.healthy
-                      ? `pid ${s.service.pid} · ${formatMem(s.service.memory)}`
-                      : undefined
-                  }
+                  className="px-4 py-3 text-text-dim text-xs whitespace-nowrap overflow-hidden"
+                  title={s?.service.healthy ? `pid ${s.service.pid} · ${formatMem(s.service.memory)}` : undefined}
                 >
                   {formatTs(s?.ts)}
                 </td>
@@ -199,10 +274,7 @@ export function HostsTable({
                     <div className="flex items-center justify-end gap-1.5">
                       <span className="text-xs text-text-dim mr-1">Delete?</span>
                       <button
-                        onClick={() => {
-                          onDelete(h);
-                          setConfirmId(null);
-                        }}
+                        onClick={() => { onDelete(h); setConfirmId(null); }}
                         className="px-2.5 py-1 rounded text-xs bg-neon-red/20 border border-neon-red/40 text-neon-red hover:bg-neon-red/30"
                       >
                         Confirm
@@ -232,14 +304,9 @@ export function HostsTable({
                       >
                         <Pencil size={16} />
                       </button>
-                      <div
-                        className="relative"
-                        ref={menuOpenId === h.id ? menuRef : null}
-                      >
+                      <div className="relative" ref={menuOpenId === h.id ? menuRef : null}>
                         <button
-                          onClick={() =>
-                            setMenuOpenId(menuOpenId === h.id ? null : h.id)
-                          }
+                          onClick={() => setMenuOpenId(menuOpenId === h.id ? null : h.id)}
                           className="p-2 rounded-md hover:bg-white/10 text-text-dim hover:text-text transition-colors"
                           title="More actions"
                         >
@@ -250,27 +317,18 @@ export function HostsTable({
                             <MenuItem
                               icon={<RotateCcw size={14} />}
                               label="Restart FreeRADIUS"
-                              onClick={() => {
-                                onAction(h, "restart-service");
-                                setMenuOpenId(null);
-                              }}
+                              onClick={() => { onAction(h, "restart-service"); setMenuOpenId(null); }}
                             />
                             <MenuItem
                               icon={<RefreshCw size={14} />}
                               label="Reinstall / Repair"
-                              onClick={() => {
-                                onAction(h, "reinstall");
-                                setMenuOpenId(null);
-                              }}
+                              onClick={() => { onAction(h, "reinstall"); setMenuOpenId(null); }}
                             />
                             <div className="border-t border-border my-1" />
                             <MenuItem
                               icon={<Copy size={14} />}
                               label="Copy config to another host..."
-                              onClick={() => {
-                                onCopyConfig(h);
-                                setMenuOpenId(null);
-                              }}
+                              onClick={() => { onCopyConfig(h); setMenuOpenId(null); }}
                             />
                           </div>
                         )}
@@ -299,18 +357,18 @@ function SortableTh({
   sortKey,
   currentSort,
   onClick,
-  className = "",
+  resizeHandle,
 }: {
   label: string;
   sortKey: SortKey;
   currentSort: SortState;
   onClick: (key: SortKey) => void;
-  className?: string;
+  resizeHandle?: React.ReactNode;
 }) {
   const active = currentSort?.key === sortKey;
   const dir = active ? currentSort!.dir : null;
   return (
-    <th className={`px-4 py-3 font-medium ${className}`}>
+    <th className="px-4 py-3 font-medium relative">
       <button
         type="button"
         onClick={() => onClick(sortKey)}
@@ -325,6 +383,7 @@ function SortableTh({
           <ChevronsUpDown size={12} className="opacity-40" />
         )}
       </button>
+      {resizeHandle}
     </th>
   );
 }
