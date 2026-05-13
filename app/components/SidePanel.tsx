@@ -10,7 +10,7 @@ import { getSocket } from "../lib/socket";
 import { TagInput } from "./TagInput";
 import { Stepper } from "./Stepper";
 import { PasswordInput } from "./PasswordInput";
-import { validateHostnameOptional, validateIPv4 } from "../lib/validation";
+import { validateAddress } from "../lib/validation";
 
 type Props = {
   open: boolean;
@@ -24,7 +24,6 @@ type Phase = "idle" | "provisioning" | "success" | "error";
 export function SidePanel({ open, mode, editing, onClose }: Props) {
   const [friendlyName, setFriendlyName] = useState("");
   const [ipAddress, setIpAddress] = useState("");
-  const [hostname, setHostname] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [sshPort, setSshPort] = useState(22);
   const [sshUsername, setSshUsername] = useState("");
@@ -41,12 +40,10 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
     if (mode === "edit" && editing) {
       setFriendlyName(editing.friendlyName);
       setIpAddress(editing.ipAddress);
-      setHostname(editing.hostname ?? "");
       setTags(editing.tags ?? []);
     } else {
       setFriendlyName("");
       setIpAddress("");
-      setHostname("");
       setTags([]);
       setSshPort(22);
       setSshUsername("");
@@ -58,9 +55,8 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
     setSteps([]);
   }, [open, mode, editing]);
 
-  const ipError = ipAddress ? validateIPv4(ipAddress) : null;
-  const hostnameError = validateHostnameOptional(hostname);
-  const formInvalid = !!ipError || !!hostnameError || !ipAddress.trim() || !friendlyName.trim();
+  const addressError = ipAddress ? validateAddress(ipAddress) : null;
+  const formInvalid = !!addressError || !ipAddress.trim() || !friendlyName.trim();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -71,7 +67,6 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
         await updateHost(editing.id, {
           friendlyName,
           ipAddress,
-          hostname: hostname.trim() || null,
           tags,
         });
         toast.success(`Updated ${friendlyName}`);
@@ -92,7 +87,6 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
       const { sessionId } = await createHost({
         friendlyName,
         ipAddress,
-        hostname: hostname.trim() || null,
         port: 9000,
         tags,
         sshPort,
@@ -180,29 +174,16 @@ export function SidePanel({ open, mode, editing, onClose }: Props) {
                 />
               </Field>
 
-              <Field label="IP Address" required error={ipError}>
+              <Field label="IP or Hostname" required error={addressError}>
                 <input
                   required
                   value={ipAddress}
                   onChange={(e) => setIpAddress(e.target.value)}
                   disabled={phase === "provisioning"}
-                  placeholder="10.76.191.233"
-                  aria-invalid={!!ipError}
+                  placeholder="10.76.191.233 or radius.lab.example.com"
+                  aria-invalid={!!addressError}
                   className={`input w-full font-mono ${
-                    ipError ? "!border-neon-red focus:!border-neon-red" : ""
-                  }`}
-                />
-              </Field>
-
-              <Field label="Hostname" error={hostnameError}>
-                <input
-                  value={hostname}
-                  onChange={(e) => setHostname(e.target.value)}
-                  disabled={phase === "provisioning"}
-                  placeholder="radius.lab.example.com"
-                  aria-invalid={!!hostnameError}
-                  className={`input w-full font-mono ${
-                    hostnameError ? "!border-neon-red focus:!border-neon-red" : ""
+                    addressError ? "!border-neon-red focus:!border-neon-red" : ""
                   }`}
                 />
               </Field>

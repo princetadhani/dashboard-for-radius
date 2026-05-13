@@ -6,7 +6,6 @@ import {
   Pencil,
   Trash2,
   Server,
-  Activity,
   MoreVertical,
   RefreshCw,
   RotateCcw,
@@ -42,10 +41,18 @@ function formatMem(bytes?: number): string {
 
 function formatTs(ts?: number): string {
   if (!ts) return "never";
-  const diff = (Date.now() - ts) / 1000;
-  if (diff < 60) return `${Math.floor(diff)}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  return `${Math.floor(diff / 3600)}h ago`;
+  const d = new Date(ts);
+  const date = d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  const time = d.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  return `${date} ${time}`;
 }
 
 export function HostsTable({
@@ -114,7 +121,7 @@ export function HostsTable({
             <th className="px-4 py-3 font-medium w-[22%]">Tags</th>
             <th className="px-4 py-3 font-medium text-center w-[70px]">Host</th>
             <th className="px-4 py-3 font-medium text-center w-[70px]">Service</th>
-            <th className="px-4 py-3 font-medium w-[110px]">Last Seen</th>
+            <th className="px-4 py-3 font-medium w-[150px]">Last Sync</th>
             <th className="px-4 py-3 font-medium text-right w-[180px]">Actions</th>
           </tr>
         </thead>
@@ -134,23 +141,17 @@ export function HostsTable({
                   <div className="font-medium truncate" title={h.friendlyName}>
                     {h.friendlyName}
                   </div>
-                  {h.hostname && (
-                    <div className="mt-0.5 min-w-0 flex">
-                      <CopyText
-                        value={h.hostname}
-                        label="Copy hostname"
-                        textClassName="font-mono text-[11px] text-text-dim"
-                      >
-                        {h.hostname}
-                      </CopyText>
-                    </div>
-                  )}
                 </td>
-                <td className="px-4 py-3 font-mono text-text-dim whitespace-nowrap">
-                  <CopyText value={h.ipAddress} label="Copy IP">
-                    {h.ipAddress}
-                    <span className="text-text-dim/60">:{h.port}</span>
-                  </CopyText>
+                <td className="px-4 py-3 font-mono text-text-dim">
+                  <div className="flex min-w-0">
+                    <CopyText
+                      value={h.ipAddress}
+                      label="Copy address"
+                      className="min-w-0"
+                    >
+                      {h.ipAddress}
+                    </CopyText>
+                  </div>
                 </td>
                 <td className="px-4 py-3 overflow-hidden">
                   <TagList tags={h.tags} />
@@ -289,10 +290,6 @@ export function HostsTable({
           })}
         </tbody>
       </table>
-      <div className="px-4 py-2 border-t border-border bg-black/20 text-xs text-text-dim flex items-center gap-2">
-        <Activity size={12} />
-        Live status updates every 10s via WebSocket
-      </div>
     </div>
   );
 }

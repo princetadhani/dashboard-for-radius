@@ -29,7 +29,6 @@ export async function fetchHosts(): Promise<{
 export async function createHost(input: {
   friendlyName: string;
   ipAddress: string;
-  hostname?: string | null;
   port: number;
   tags: string[];
   sshPort: number;
@@ -47,7 +46,6 @@ export async function updateHost(
   input: {
     friendlyName?: string;
     ipAddress?: string;
-    hostname?: string | null;
     port?: number;
     tags?: string[];
   },

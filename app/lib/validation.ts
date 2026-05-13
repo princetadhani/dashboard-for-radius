@@ -15,7 +15,20 @@ export function validateHostnameOptional(value: string): string | null {
   const v = value.trim();
   if (!v) return null;
   if (v.length > 253) return "Hostname is too long (max 253 chars)";
+  if (!HOSTNAME_RE.test(v)) return "Invalid hostname (letters, digits, dashes, dots only)";
+  return null;
+}
+
+/**
+ * Accepts either an IPv4 address or an RFC-1123 hostname.
+ * Returns null when valid, otherwise an error message.
+ */
+export function validateAddress(value: string): string | null {
+  const v = value.trim();
+  if (!v) return "Address is required";
+  if (IPV4_RE.test(v)) return null;
+  if (v.length > 253) return "Address is too long (max 253 chars)";
   if (!HOSTNAME_RE.test(v))
-    return "Invalid hostname (letters, digits, dashes, dots only)";
+    return "Must be a valid IPv4 address (10.0.0.1) or hostname (radius.example.com)";
   return null;
 }

@@ -22,7 +22,6 @@ type HostRow = {
   friendlyName: string;
   ipAddress: string;
   port: number;
-  hostname?: string | null;
   tags?: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -103,7 +102,6 @@ export function buildHostsRouter(io: IOServer): Router {
         data: {
           friendlyName: input.friendlyName,
           ipAddress: input.ipAddress,
-          hostname: input.hostname ?? null,
           port: input.port,
           tags: JSON.stringify(input.tags ?? []),
         },
@@ -121,8 +119,6 @@ export function buildHostsRouter(io: IOServer): Router {
     }
     const data: Record<string, unknown> = { ...parsed.data };
     if (parsed.data.tags) data.tags = JSON.stringify(parsed.data.tags);
-    // Allow explicit clearing of hostname by sending null/empty
-    if (parsed.data.hostname === null || parsed.data.hostname === '') data.hostname = null;
 
     try {
       const host = await prisma.host.update({
