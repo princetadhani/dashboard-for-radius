@@ -3,6 +3,27 @@ import type { Server as IOServer } from 'socket.io';
 import { env } from '../lib/env.js';
 import { makeEmitter } from '../lib/provision-emit.js';
 
+function friendlySshError(e: Error & { code?: string }, host: string, port: number): string {
+  switch (e.code) {
+    case 'ENETUNREACH':
+      return `Host ${host} is unreachable — it may be powered off, or the network route is down`;
+    case 'ECONNREFUSED':
+      return `Connection refused on ${host}:${port} — SSH may not be running or the port is wrong`;
+    case 'ETIMEDOUT':
+    case 'ECONNRESET':
+      return `Connection to ${host}:${port} timed out — host may be unresponsive or firewalled`;
+    case 'EHOSTUNREACH':
+      return `No route to host ${host} — check that the host is online and reachable from this server`;
+    case 'ENOTFOUND':
+      return `Could not resolve hostname "${host}" — check DNS or try an IP address instead`;
+    default:
+      if (e.message.includes('All configured authentication methods failed')) {
+        return `Authentication failed for user on ${host} — wrong username or password`;
+      }
+      return e.message;
+  }
+}
+
 export type SshCreds = {
   ipAddress: string;
   sshPort: number;
@@ -100,8 +121,9 @@ export async function runSshCommand(
 
     conn.on('error', (e) => {
       clearTimeout(timeout);
-      emit(`SSH error: ${e.message}`, 'stderr');
-      finish({ success: false, error: e.message });
+      const friendly = friendlySshError(e, ipAddress, sshPort);
+      emit(`SSH error: ${friendly}`, 'stderr');
+      finish({ success: false, error: friendly });
     });
 
     emit(`Connecting to ${ipAddress}:${sshPort} as ${sshUsername}...`, 'system');
