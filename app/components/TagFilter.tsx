@@ -32,14 +32,19 @@ export function TagFilter({ allTags, activeTags, onToggle, onClear }: Props) {
     ? allTags.filter((t) => t.toLowerCase().includes(query.toLowerCase()))
     : allTags;
 
+  const hasNoTags = allTags.length === 0;
+
   return (
     <div className="relative shrink-0">
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        disabled={allTags.length === 0}
-        className="input flex items-center gap-2 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+        onClick={() => {
+          if (hasNoTags) return;
+          setOpen((v) => !v);
+        }}
+        className={`input flex items-center gap-2 ${hasNoTags ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+          }`}
       >
         <Tag size={14} className="text-text-dim" />
         <span className="text-sm">
@@ -66,7 +71,7 @@ export function TagFilter({ allTags, activeTags, onToggle, onClear }: Props) {
             />
           </div>
 
-          <div className="overflow-y-auto flex-1">
+          <div className="overflow-y-auto flex-1 show-scrollbar">
             {filtered.length === 0 ? (
               <div className="px-3 py-3 text-xs text-text-dim text-center">
                 No tags match

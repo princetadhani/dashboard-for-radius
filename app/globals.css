@@ -30,6 +30,7 @@ body {
   background-image: none;
   color: var(--text);
   font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
 }
 
 .glass {
@@ -55,30 +56,36 @@ body {
 }
 
 @keyframes neon-pulse-green {
+
   0%,
   100% {
     box-shadow: 0 0 6px var(--neon-green), 0 0 12px rgba(158, 206, 106, 0.5);
   }
+
   50% {
     box-shadow: 0 0 10px var(--neon-green), 0 0 22px rgba(158, 206, 106, 0.85);
   }
 }
 
 @keyframes neon-pulse-red {
+
   0%,
   100% {
     box-shadow: 0 0 6px var(--neon-red), 0 0 12px rgba(239, 68, 68, 0.5);
   }
+
   50% {
     box-shadow: 0 0 10px var(--neon-red), 0 0 22px rgba(239, 68, 68, 0.85);
   }
 }
 
 @keyframes neon-pulse-blue {
+
   0%,
   100% {
     box-shadow: 0 0 6px var(--neon-blue), 0 0 12px rgba(51, 153, 255, 0.5);
   }
+
   50% {
     box-shadow: 0 0 10px var(--neon-blue), 0 0 22px rgba(51, 153, 255, 0.85);
   }
@@ -117,24 +124,49 @@ body {
     outline: none;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
+
   .input:focus {
     border-color: var(--neon-blue);
     box-shadow: 0 0 0 3px rgba(51, 153, 255, 0.15);
   }
+
   .input:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
 }
 
-::-webkit-scrollbar {
+/* Hide all scrollbars by default */
+* {
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
+}
+
+*::-webkit-scrollbar {
+  display: none;
+  /* Chrome, Safari, Opera */
+}
+
+/* Show scrollbar only for elements with .show-scrollbar class */
+.show-scrollbar {
+  scrollbar-width: thin;
+  /* Firefox */
+  scrollbar-color: var(--border) transparent;
+}
+
+.show-scrollbar::-webkit-scrollbar {
+  display: block;
   width: 10px;
   height: 10px;
 }
-::-webkit-scrollbar-thumb {
+
+.show-scrollbar::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 6px;
 }
-::-webkit-scrollbar-thumb:hover {
+
+.show-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #3a3f4d;
 }

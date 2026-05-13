@@ -146,7 +146,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="flex-1 flex flex-col px-6 lg:px-10 py-6 w-full">
+    <main className="flex-1 flex flex-col px-6 lg:px-10 py-6 w-full overflow-x-hidden">
       <header className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg glass flex items-center justify-center">
@@ -259,9 +259,8 @@ function Stat({
   return (
     <div className="glass rounded-md px-3 py-1.5 text-center min-w-[68px]">
       <div
-        className={`text-base font-mono font-semibold ${
-          accent === "green" ? "text-neon-green" : "text-text"
-        }`}
+        className={`text-base font-mono font-semibold ${accent === "green" ? "text-neon-green" : "text-text"
+          }`}
       >
         {value}
       </div>
