@@ -5,6 +5,7 @@ import { env } from '../lib/env.js';
 import {
   copyConfigSchema,
   createHostSchema,
+  formatZodError,
   sshActionSchema,
   updateHostSchema,
 } from '../lib/validation.js';
@@ -71,7 +72,7 @@ export function buildHostsRouter(io: IOServer): Router {
   router.post('/', async (req, res) => {
     const parsed = createHostSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ error: 'invalid input', details: parsed.error.flatten() });
+      return res.status(400).json({ error: formatZodError(parsed.error) });
     }
     const input = parsed.data;
 
@@ -134,7 +135,7 @@ export function buildHostsRouter(io: IOServer): Router {
   router.patch('/:id', async (req, res) => {
     const parsed = updateHostSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ error: 'invalid input', details: parsed.error.flatten() });
+      return res.status(400).json({ error: formatZodError(parsed.error) });
     }
     const data: Record<string, unknown> = { ...parsed.data };
     if (parsed.data.tags) data.tags = JSON.stringify(parsed.data.tags);
@@ -165,7 +166,7 @@ export function buildHostsRouter(io: IOServer): Router {
   router.post('/:id/actions', async (req, res) => {
     const parsed = sshActionSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ error: 'invalid input', details: parsed.error.flatten() });
+      return res.status(400).json({ error: formatZodError(parsed.error) });
     }
     const host = await prisma.host.findUnique({ where: { id: req.params.id } });
     if (!host) return res.status(404).json({ error: 'host not found' });
@@ -254,7 +255,7 @@ export function buildHostsRouter(io: IOServer): Router {
   router.post('/:id/copy-config', async (req, res) => {
     const parsed = copyConfigSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ error: 'invalid input', details: parsed.error.flatten() });
+      return res.status(400).json({ error: formatZodError(parsed.error) });
     }
     const sourceHost = await prisma.host.findUnique({ where: { id: req.params.id } });
     const targetHost = await prisma.host.findUnique({ where: { id: parsed.data.targetHostId } });

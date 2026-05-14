@@ -30,8 +30,12 @@ const IPV4_RE = /^(\d{1,3}\.){3}\d{1,3}$/;
  * the user-entered IP as a candidate too.
  */
 export async function discoverHostIps(creds: SshCreds): Promise<string[]> {
+  // Exclude docker/bridge virtual interfaces — their IPs (e.g. 172.17.0.1 on docker0)
+  // exist on every Docker host and would cause the backend to probe itself.
   const cmd =
-    "ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1 || hostname -I";
+    "ip -4 -o addr show scope global 2>/dev/null" +
+    " | grep -Ev '\\s(docker[0-9]*|br-[a-f0-9]+|virbr[0-9]*)\\s'" +
+    " | awk '{print $4}' | cut -d/ -f1";
   const r = await sshExecCapture(creds, cmd, 10_000);
   if (!r.ok) return [];
   return r.stdout
