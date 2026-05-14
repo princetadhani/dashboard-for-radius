@@ -138,6 +138,57 @@ export async function runSshCommand(
   });
 }
 
+/**
+ * Run a short non-interactive command over SSH and capture stdout.
+ * Does NOT stream to socket.io. For commands that don't require sudo.
+ */
+export async function sshExecCapture(
+  creds: SshCreds,
+  command: string,
+  timeoutMs = 15_000,
+): Promise<{ ok: true; stdout: string } | { ok: false; error: string }> {
+  const { ipAddress, sshPort, sshUsername, sshPassword } = creds;
+  return await new Promise((resolve) => {
+    const conn = new Client();
+    let resolved = false;
+    const finish = (r: { ok: true; stdout: string } | { ok: false; error: string }) => {
+      if (resolved) return;
+      resolved = true;
+      try { conn.end(); } catch {}
+      resolve(r);
+    };
+    const timeout = setTimeout(() => finish({ ok: false, error: 'timeout' }), timeoutMs);
+
+    conn.on('ready', () => {
+      conn.exec(command, (err, stream) => {
+        if (err) {
+          clearTimeout(timeout);
+          return finish({ ok: false, error: err.message });
+        }
+        let stdout = '';
+        stream.on('data', (d: Buffer) => { stdout += d.toString('utf8'); });
+        stream.stderr.on('data', () => {});
+        stream.on('close', (code: number | null) => {
+          clearTimeout(timeout);
+          if (code === 0) finish({ ok: true, stdout });
+          else finish({ ok: false, error: `exit ${code}` });
+        });
+      });
+    });
+    conn.on('error', (e) => {
+      clearTimeout(timeout);
+      finish({ ok: false, error: friendlySshError(e, ipAddress, sshPort) });
+    });
+    conn.connect({
+      host: ipAddress,
+      port: sshPort,
+      username: sshUsername,
+      password: sshPassword,
+      readyTimeout: 15_000,
+    });
+  });
+}
+
 /** Build the sudo command that pipes-to-bash a script URL. */
 export function installScriptCommand(scriptUrl: string): string {
   return `sudo -p 'SUDOPW:' bash -c "curl -sSL '${scriptUrl}' | bash"`;

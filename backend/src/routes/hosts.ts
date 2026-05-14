@@ -8,7 +8,7 @@ import {
   sshActionSchema,
   updateHostSchema,
 } from '../lib/validation.js';
-import { runProvision, waitForHealthy } from '../services/ssh-provisioner.js';
+import { discoverHostIps, runProvision, waitForHealthy } from '../services/ssh-provisioner.js';
 import {
   installScriptCommand,
   runSshCommand,
@@ -21,21 +21,30 @@ type HostRow = {
   id: string;
   friendlyName: string;
   ipAddress: string;
+  controlIp?: string | null;
+  knownIps?: string | null;
   port: number;
   tags?: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
 
-function serialize(h: HostRow) {
-  let tags: string[] = [];
-  if (h.tags) {
-    try {
-      const parsed = JSON.parse(h.tags);
-      if (Array.isArray(parsed)) tags = parsed.filter((t) => typeof t === 'string');
-    } catch {}
+function parseStringList(s: string | null | undefined): string[] {
+  if (!s) return [];
+  try {
+    const parsed = JSON.parse(s);
+    return Array.isArray(parsed) ? parsed.filter((t) => typeof t === 'string') : [];
+  } catch {
+    return [];
   }
-  return { ...h, tags };
+}
+
+function serialize(h: HostRow) {
+  return {
+    ...h,
+    tags: parseStringList(h.tags),
+    knownIps: parseStringList(h.knownIps),
+  };
 }
 
 function newSessionId(prefix: string): string {
@@ -88,8 +97,16 @@ export function buildHostsRouter(io: IOServer): Router {
         return;
       }
 
-      const healthy = await waitForHealthy(input.ipAddress, input.port, io, room);
-      if (!healthy) {
+      const sshCreds = {
+        ipAddress: input.ipAddress,
+        sshPort: input.sshPort,
+        sshUsername: input.sshUsername,
+        sshPassword: input.sshPassword,
+      };
+      const discovered = await discoverHostIps(sshCreds);
+      const candidates = Array.from(new Set([input.ipAddress, ...discovered]));
+      const workingIp = await waitForHealthy(candidates, input.port, io, room);
+      if (!workingIp) {
         io.to(room).emit('provision:done', {
           success: false,
           error: 'Service did not become healthy after install',
@@ -102,6 +119,8 @@ export function buildHostsRouter(io: IOServer): Router {
         data: {
           friendlyName: input.friendlyName,
           ipAddress: input.ipAddress,
+          controlIp: workingIp === input.ipAddress ? null : workingIp,
+          knownIps: JSON.stringify(candidates),
           port: input.port,
           tags: JSON.stringify(input.tags ?? []),
         },
@@ -183,10 +202,51 @@ export function buildHostsRouter(io: IOServer): Router {
         return;
       }
 
-      // After install/repair, wait for health. After restart, just verify briefly.
-      const healthy = await waitForHealthy(host.ipAddress, host.port, io, room);
-      io.to(room).emit('provision:done', healthy
-        ? { success: true, host: serialize(host), sessionId }
+      // After install/repair, re-discover IPs (interfaces may have changed).
+      // After restart, just use what we already know.
+      const sshCreds = {
+        ipAddress: host.ipAddress,
+        sshPort: input.sshPort,
+        sshUsername: input.sshUsername,
+        sshPassword: input.sshPassword,
+      };
+      const previousKnown = parseStringList(host.knownIps);
+      const discovered =
+        input.action === 'restart-service' ? [] : await discoverHostIps(sshCreds);
+      const candidates = Array.from(new Set([
+        ...(host.controlIp ? [host.controlIp] : []),
+        host.ipAddress,
+        ...previousKnown,
+        ...discovered,
+      ]));
+      const workingIp = await waitForHealthy(candidates, host.port, io, room);
+
+      let updatedHost = host;
+      if (workingIp) {
+        const desiredControlIp = workingIp === host.ipAddress ? null : workingIp;
+        // For install/repair, refresh knownIps to the freshly-discovered set
+        // (plus the entered IP). For restart, leave knownIps untouched.
+        const desiredKnownIps =
+          input.action === 'restart-service'
+            ? null
+            : JSON.stringify(Array.from(new Set([host.ipAddress, ...discovered])));
+        const controlIpChanged = desiredControlIp !== (host.controlIp ?? null);
+        const knownIpsChanged =
+          desiredKnownIps !== null && desiredKnownIps !== (host.knownIps ?? '[]');
+        if (controlIpChanged || knownIpsChanged) {
+          updatedHost = await prisma.host.update({
+            where: { id: host.id },
+            data: {
+              controlIp: desiredControlIp,
+              ...(desiredKnownIps !== null ? { knownIps: desiredKnownIps } : {}),
+            },
+          });
+          io.emit('host:updated', serialize(updatedHost));
+        }
+      }
+
+      io.to(room).emit('provision:done', workingIp
+        ? { success: true, host: serialize(updatedHost), sessionId }
         : { success: false, error: 'Service did not become healthy after action', sessionId });
     });
   });
@@ -223,9 +283,28 @@ export function buildHostsRouter(io: IOServer): Router {
         return;
       }
 
-      const healthy = await waitForHealthy(targetHost.ipAddress, targetHost.port, io, room);
-      io.to(room).emit('provision:done', healthy
-        ? { success: true, host: serialize(targetHost), sessionId }
+      const previousKnown = parseStringList(targetHost.knownIps);
+      const candidates = Array.from(new Set([
+        ...(targetHost.controlIp ? [targetHost.controlIp] : []),
+        targetHost.ipAddress,
+        ...previousKnown,
+      ]));
+      const workingIp = await waitForHealthy(candidates, targetHost.port, io, room);
+
+      let updatedTarget = targetHost;
+      if (workingIp) {
+        const desiredControlIp = workingIp === targetHost.ipAddress ? null : workingIp;
+        if (desiredControlIp !== (targetHost.controlIp ?? null)) {
+          updatedTarget = await prisma.host.update({
+            where: { id: targetHost.id },
+            data: { controlIp: desiredControlIp },
+          });
+          io.emit('host:updated', serialize(updatedTarget));
+        }
+      }
+
+      io.to(room).emit('provision:done', workingIp
+        ? { success: true, host: serialize(updatedTarget), sessionId }
         : { success: false, error: 'Target service did not become healthy after restart', sessionId });
     });
   });

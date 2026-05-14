@@ -11,6 +11,8 @@ model Host {
   id           String   @id @default(cuid())
   friendlyName String
   ipAddress    String   @unique
+  controlIp    String?
+  knownIps     String   @default("[]")
   port         Int      @default(9000)
   tags         String   @default("[]")
   createdAt    DateTime @default(now())
