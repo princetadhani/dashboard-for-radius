@@ -14,6 +14,8 @@ import {
   ArrowUp,
   ArrowDown,
   ChevronsUpDown,
+  Check,
+  X,
 } from "lucide-react";
 import type { Host, HostStatusUpdate, SshActionType } from "../lib/types";
 import { StatusDot } from "./StatusDot";
@@ -327,19 +329,21 @@ export function HostsTable({
                 </td>
                 <td className="px-2 py-3">
                   {isConfirming ? (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center justify-start gap-1">
                       <span className="text-xs text-text-dim mr-1">Delete?</span>
                       <button
                         onClick={() => { onDelete(h); setConfirmId(null); }}
-                        className="px-2.5 py-1 rounded text-xs bg-neon-red/20 border border-neon-red/40 text-neon-red hover:bg-neon-red/30"
+                        className="p-2 rounded-md bg-neon-red/20 border border-neon-red/40 text-neon-red hover:bg-neon-red/30 transition-colors"
+                        title="Confirm delete"
                       >
-                        Confirm
+                        <Check size={16} />
                       </button>
                       <button
                         onClick={() => setConfirmId(null)}
-                        className="px-2.5 py-1 rounded text-xs text-text-dim hover:bg-white/10"
+                        className="p-2 rounded-md hover:bg-white/10 text-text-dim hover:text-text transition-colors"
+                        title="Cancel"
                       >
-                        Cancel
+                        <X size={16} />
                       </button>
                     </div>
                   ) : (
