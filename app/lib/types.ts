@@ -2,6 +2,8 @@ export type Host = {
   id: string;
   friendlyName: string;
   ipAddress: string;
+  controlIp?: string | null;
+  knownIps: string[];
   port: number;
   tags: string[];
   createdAt: string;

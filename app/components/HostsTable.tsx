@@ -20,7 +20,7 @@ import {
 import type { Host, HostStatusUpdate, SshActionType } from "../lib/types";
 import { StatusDot } from "./StatusDot";
 import { TagList } from "./TagChips";
-import { CopyText } from "./CopyText";
+import { IpAddressDisplay } from "./IpAddressDisplay";
 
 export type SortKey = "name" | "ip";
 export type SortState = { key: SortKey; dir: "asc" | "desc" } | null;
@@ -284,11 +284,11 @@ export function HostsTable({
                   </div>
                 </td>
                 <td className="px-4 py-3 font-mono text-text-dim">
-                  <div className="flex min-w-0">
-                    <CopyText value={h.ipAddress} label="Copy address" className="min-w-0">
-                      {h.ipAddress}
-                    </CopyText>
-                  </div>
+                  <IpAddressDisplay
+                    primaryIp={h.ipAddress}
+                    controlIp={h.controlIp}
+                    knownIps={h.knownIps}
+                  />
                 </td>
                 <td className="px-4 py-3 overflow-hidden">
                   <TagList tags={h.tags} />
