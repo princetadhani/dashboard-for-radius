@@ -48,18 +48,26 @@ function sessionIdFromRoom(room: string): string {
   return room.startsWith('provision:') ? room.slice('provision:'.length) : room;
 }
 
-async function probeOnce(ip: string, port: number): Promise<boolean> {
+type ProbeResult =
+  | { ok: true }
+  | { ok: false; reason: string };
+
+async function probeOnce(ip: string, port: number): Promise<ProbeResult> {
   const url = `http://${ip}:${port}/api/service/status`;
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), env.statusHttpTimeoutMs);
     const res = await fetch(url, { signal: ctrl.signal });
     clearTimeout(t);
-    if (!res.ok) return false;
+    if (!res.ok) return { ok: false, reason: `HTTP ${res.status} ${res.statusText}` };
     const body = (await res.json()) as { status?: string; active?: boolean };
-    return body.status === 'running' && body.active === true;
-  } catch {
-    return false;
+    if (body.status !== 'running' || body.active !== true) {
+      return { ok: false, reason: `status=${body.status ?? '?'} active=${body.active ?? '?'}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, reason: msg };
   }
 }
 
@@ -98,17 +106,27 @@ export async function waitForHealthy(
 
   const deadline = Date.now() + env.sshPostInstallHealthcheckTimeoutMs;
   while (Date.now() < deadline) {
-    for (const ip of ips) {
-      if (await probeOnce(ip, port)) {
-        io.to(room).emit('provision:log', {
-          line: `Service is healthy at http://${ip}:${port} (status=running, active=true)`,
-          level: 'system',
-          ts: Date.now(),
-          sessionId,
-        });
-        return ip;
-      }
+    const results = await Promise.all(ips.map(async (ip) => ({ ip, result: await probeOnce(ip, port) })));
+    const winner = results.find((r) => r.result.ok);
+    if (winner) {
+      io.to(room).emit('provision:log', {
+        line: `Service is healthy at http://${winner.ip}:${port}`,
+        level: 'system',
+        ts: Date.now(),
+        sessionId,
+      });
+      return winner.ip;
     }
+    // Log why each candidate failed so the user can see the actual error
+    const failures = results
+      .map((r) => `${r.ip}: ${(r.result as { ok: false; reason: string }).reason}`)
+      .join(' | ');
+    io.to(room).emit('provision:log', {
+      line: `Not healthy yet — ${failures}`,
+      level: 'system',
+      ts: Date.now(),
+      sessionId,
+    });
     await new Promise((r) => setTimeout(r, 3_000));
   }
   io.to(room).emit('provision:log', {
