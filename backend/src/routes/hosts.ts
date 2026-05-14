@@ -106,11 +106,11 @@ export function buildHostsRouter(io: IOServer): Router {
       };
       const discovered = await discoverHostIps(sshCreds);
       const candidates = Array.from(new Set([input.ipAddress, ...discovered]));
-      const workingIp = await waitForHealthy(candidates, input.port, io, room, sshCreds);
-      if (!workingIp) {
+      const healthResult = await waitForHealthy(candidates, input.port, io, room, sshCreds);
+      if (!healthResult) {
         io.to(room).emit('provision:done', {
           success: false,
-          error: 'Service did not become healthy after install',
+          error: 'Could not reach the host after install — check that port 9000 is accessible',
           sessionId,
         });
         return;
@@ -120,7 +120,7 @@ export function buildHostsRouter(io: IOServer): Router {
         data: {
           friendlyName: input.friendlyName,
           ipAddress: input.ipAddress,
-          controlIp: workingIp === input.ipAddress ? null : workingIp,
+          controlIp: healthResult.ip === input.ipAddress ? null : healthResult.ip,
           knownIps: JSON.stringify(candidates),
           port: input.port,
           tags: JSON.stringify(input.tags ?? []),
@@ -220,13 +220,11 @@ export function buildHostsRouter(io: IOServer): Router {
         ...previousKnown,
         ...discovered,
       ]));
-      const workingIp = await waitForHealthy(candidates, host.port, io, room, sshCreds);
+      const healthResult = await waitForHealthy(candidates, host.port, io, room, sshCreds);
 
       let updatedHost = host;
-      if (workingIp) {
-        const desiredControlIp = workingIp === host.ipAddress ? null : workingIp;
-        // For install/repair, refresh knownIps to the freshly-discovered set
-        // (plus the entered IP). For restart, leave knownIps untouched.
+      if (healthResult) {
+        const desiredControlIp = healthResult.ip === host.ipAddress ? null : healthResult.ip;
         const desiredKnownIps =
           input.action === 'restart-service'
             ? null
@@ -246,9 +244,9 @@ export function buildHostsRouter(io: IOServer): Router {
         }
       }
 
-      io.to(room).emit('provision:done', workingIp
+      io.to(room).emit('provision:done', healthResult
         ? { success: true, host: serialize(updatedHost), sessionId }
-        : { success: false, error: 'Service did not become healthy after action', sessionId });
+        : { success: false, error: 'Could not reach the host after action — check network connectivity', sessionId });
     });
   });
 
@@ -296,11 +294,11 @@ export function buildHostsRouter(io: IOServer): Router {
         targetHost.ipAddress,
         ...previousKnown,
       ]));
-      const workingIp = await waitForHealthy(candidates, targetHost.port, io, room, targetSshCreds);
+      const healthResult = await waitForHealthy(candidates, targetHost.port, io, room, targetSshCreds);
 
       let updatedTarget = targetHost;
-      if (workingIp) {
-        const desiredControlIp = workingIp === targetHost.ipAddress ? null : workingIp;
+      if (healthResult) {
+        const desiredControlIp = healthResult.ip === targetHost.ipAddress ? null : healthResult.ip;
         if (desiredControlIp !== (targetHost.controlIp ?? null)) {
           updatedTarget = await prisma.host.update({
             where: { id: targetHost.id },
@@ -310,9 +308,9 @@ export function buildHostsRouter(io: IOServer): Router {
         }
       }
 
-      io.to(room).emit('provision:done', workingIp
+      io.to(room).emit('provision:done', healthResult
         ? { success: true, host: serialize(updatedTarget), sessionId }
-        : { success: false, error: 'Target service did not become healthy after restart', sessionId });
+        : { success: false, error: 'Could not reach target host after config copy', sessionId });
     });
   });
 

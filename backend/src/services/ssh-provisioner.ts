@@ -48,23 +48,34 @@ function sessionIdFromRoom(room: string): string {
   return room.startsWith('provision:') ? room.slice('provision:'.length) : room;
 }
 
+// Three-state probe result:
+//   healthy    — control panel API up + freeradius running
+//   reachable  — control panel API up, freeradius stopped (install done, service issue)
+//   failed     — couldn't connect at all (network/firewall)
 type ProbeResult =
-  | { ok: true }
-  | { ok: false; reason: string };
+  | { kind: 'healthy' }
+  | { kind: 'reachable'; reason: string }
+  | { kind: 'failed'; reason: string };
+
+export type HealthResult = {
+  ip: string;
+  serviceHealthy: boolean;
+};
 
 async function probeViaSsh(creds: SshCreds, port: number): Promise<ProbeResult> {
   const r = await sshExecCapture(
     creds,
-    `curl -sf --max-time 5 http://127.0.0.1:${port}/api/service/status`,
+    `curl -s --max-time 5 http://127.0.0.1:${port}/api/service/status`,
     10_000,
   );
-  if (!r.ok) return { ok: false, reason: `SSH exec failed: ${r.error}` };
+  if (!r.ok) return { kind: 'failed', reason: `SSH exec failed: ${r.error}` };
   try {
     const body = JSON.parse(r.stdout) as { status?: string; active?: boolean };
-    if (body.status === 'running' && body.active === true) return { ok: true };
-    return { ok: false, reason: `status=${body.status ?? '?'} active=${body.active ?? '?'}` };
+    if (body.status === 'running' && body.active === true) return { kind: 'healthy' };
+    // API responded — control panel is up, freeradius just isn't running
+    return { kind: 'reachable', reason: `status=${body.status ?? '?'} active=${body.active ?? '?'}` };
   } catch {
-    return { ok: false, reason: `could not parse response: ${r.stdout.slice(0, 80)}` };
+    return { kind: 'failed', reason: `unexpected response: ${r.stdout.slice(0, 80)}` };
   }
 }
 
@@ -75,28 +86,31 @@ async function probeOnceHttp(ip: string, port: number): Promise<ProbeResult> {
     const t = setTimeout(() => ctrl.abort(), env.statusHttpTimeoutMs);
     const res = await fetch(url, { signal: ctrl.signal });
     clearTimeout(t);
-    if (!res.ok) return { ok: false, reason: `HTTP ${res.status}` };
+    if (!res.ok) return { kind: 'failed', reason: `HTTP ${res.status}` };
     const body = (await res.json()) as { status?: string; active?: boolean };
-    if (body.status !== 'running' || body.active !== true) {
-      return { ok: false, reason: `status=${body.status ?? '?'} active=${body.active ?? '?'}` };
-    }
-    return { ok: true };
+    if (body.status === 'running' && body.active === true) return { kind: 'healthy' };
+    // HTTP 200 + valid JSON but freeradius not running — control panel is up
+    return { kind: 'reachable', reason: `status=${body.status ?? '?'} active=${body.active ?? '?'}` };
   } catch (e) {
     const err = e as Error & { cause?: Error & { code?: string } };
-    return { ok: false, reason: err.cause?.code ?? err.cause?.message ?? err.message };
+    return { kind: 'failed', reason: err.cause?.code ?? err.cause?.message ?? err.message };
   }
 }
 
 /**
- * Poll candidate IPs on `port`/api/service/status until healthy or timed out.
+ * Poll candidate IPs on `port`/api/service/status.
  *
- * Each tick tries direct HTTP probes first (fast path). If direct HTTP fails
- * for all candidates — e.g. because the remote app rejects connections from
- * the backend's IP — falls back to probing via SSH (curl 127.0.0.1 on the
- * remote host itself), which bypasses any IP allowlist.
+ * Returns:
+ *   { ip, serviceHealthy: true }  — freeradius running, normal case
+ *   { ip, serviceHealthy: false } — control panel API is up but freeradius is
+ *                                   stopped; install completed, host should still
+ *                                   be added so the user can start the service
+ *                                   from the UI
+ *   null                          — could not reach the host at all (network/firewall)
  *
- * Returns the first IP that responded healthy via HTTP (preferred for ongoing
- * polling), or the entered IP when health was confirmed via SSH fallback.
+ * Tries direct HTTP first. Falls back to SSH curl (bypasses IP allowlists).
+ * Returns immediately on first "reachable" result — no point waiting since the
+ * control panel is up and the user can recover from there.
  */
 export async function waitForHealthy(
   candidateIps: string[],
@@ -104,7 +118,7 @@ export async function waitForHealthy(
   io: IOServer,
   room: string,
   sshCreds?: SshCreds,
-): Promise<string | null> {
+): Promise<HealthResult | null> {
   const sessionId = sessionIdFromRoom(room);
   const ips = Array.from(new Set(candidateIps.filter((ip) => IPV4_RE.test(ip))));
   if (ips.length === 0) {
@@ -127,37 +141,59 @@ export async function waitForHealthy(
 
   const deadline = Date.now() + env.sshPostInstallHealthcheckTimeoutMs;
   while (Date.now() < deadline) {
-    // Try direct HTTP on all candidates in parallel
     const httpResults = await Promise.all(
       ips.map(async (ip) => ({ ip, result: await probeOnceHttp(ip, port) })),
     );
-    const httpWinner = httpResults.find((r) => r.result.ok);
-    if (httpWinner) {
+
+    const healthy = httpResults.find((r) => r.result.kind === 'healthy');
+    if (healthy) {
       io.to(room).emit('provision:log', {
-        line: `Service is healthy at http://${httpWinner.ip}:${port}`,
+        line: `Service is healthy at http://${healthy.ip}:${port}`,
         level: 'system',
         ts: Date.now(),
         sessionId,
       });
-      return httpWinner.ip;
+      return { ip: healthy.ip, serviceHealthy: true };
     }
 
-    // Direct HTTP failed — try SSH fallback if creds available
+    // Control panel API responded but freeradius is stopped — add host immediately
+    const reachable = httpResults.find((r) => r.result.kind === 'reachable');
+    if (reachable) {
+      const reason = (reachable.result as { kind: 'reachable'; reason: string }).reason;
+      io.to(room).emit('provision:log', {
+        line: `Control panel is up at http://${reachable.ip}:${port} but FreeRADIUS is not running (${reason}). Adding host — use the UI to start the service.`,
+        level: 'system',
+        ts: Date.now(),
+        sessionId,
+      });
+      return { ip: reachable.ip, serviceHealthy: false };
+    }
+
+    // All direct HTTP failed — try SSH fallback
     if (sshCreds) {
       const sshResult = await probeViaSsh(sshCreds, port);
-      if (sshResult.ok) {
+      if (sshResult.kind === 'healthy') {
         io.to(room).emit('provision:log', {
           line: `Service is healthy (confirmed via SSH). Note: port ${port} is not directly reachable from this backend — status polling may show as unreachable until firewall rules allow access.`,
           level: 'system',
           ts: Date.now(),
           sessionId,
         });
-        return sshCreds.ipAddress;
+        return { ip: sshCreds.ipAddress, serviceHealthy: true };
+      }
+      if (sshResult.kind === 'reachable') {
+        io.to(room).emit('provision:log', {
+          line: `Control panel is up (confirmed via SSH) but FreeRADIUS is not running (${sshResult.reason}). Adding host — use the UI to start the service.`,
+          level: 'system',
+          ts: Date.now(),
+          sessionId,
+        });
+        return { ip: sshCreds.ipAddress, serviceHealthy: false };
       }
     }
 
     const failures = httpResults
-      .map((r) => `${r.ip}: ${(r.result as { ok: false; reason: string }).reason}`)
+      .map((r) => `${r.ip}: ${(r.result as { kind: 'failed'; reason: string }).reason}`)
       .join(' | ');
     io.to(room).emit('provision:log', {
       line: `Not healthy yet — ${failures}`,
