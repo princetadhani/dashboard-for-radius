@@ -96,10 +96,10 @@ export function IpAddressDisplay({ primaryIp, controlIp, knownIps }: Props) {
               left: popoverPos.left,
               zIndex: 9999,
             }}
-            className="w-72 popover rounded-md p-3"
+            className="w-67 popover rounded-md p-3"
           >
             <div className="text-xs font-semibold text-text-dim uppercase tracking-wider mb-3">
-              Additional Network Interfaces
+              Additional IP Addresses
             </div>
             <div className="space-y-2">
               {additionalIps.map((ip) => {
