@@ -52,37 +52,58 @@ type ProbeResult =
   | { ok: true }
   | { ok: false; reason: string };
 
-async function probeOnce(ip: string, port: number): Promise<ProbeResult> {
+async function probeViaSsh(creds: SshCreds, port: number): Promise<ProbeResult> {
+  const r = await sshExecCapture(
+    creds,
+    `curl -sf --max-time 5 http://127.0.0.1:${port}/api/service/status`,
+    10_000,
+  );
+  if (!r.ok) return { ok: false, reason: `SSH exec failed: ${r.error}` };
+  try {
+    const body = JSON.parse(r.stdout) as { status?: string; active?: boolean };
+    if (body.status === 'running' && body.active === true) return { ok: true };
+    return { ok: false, reason: `status=${body.status ?? '?'} active=${body.active ?? '?'}` };
+  } catch {
+    return { ok: false, reason: `could not parse response: ${r.stdout.slice(0, 80)}` };
+  }
+}
+
+async function probeOnceHttp(ip: string, port: number): Promise<ProbeResult> {
   const url = `http://${ip}:${port}/api/service/status`;
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), env.statusHttpTimeoutMs);
     const res = await fetch(url, { signal: ctrl.signal });
     clearTimeout(t);
-    if (!res.ok) return { ok: false, reason: `HTTP ${res.status} ${res.statusText}` };
+    if (!res.ok) return { ok: false, reason: `HTTP ${res.status}` };
     const body = (await res.json()) as { status?: string; active?: boolean };
     if (body.status !== 'running' || body.active !== true) {
       return { ok: false, reason: `status=${body.status ?? '?'} active=${body.active ?? '?'}` };
     }
     return { ok: true };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, reason: msg };
+    const err = e as Error & { cause?: Error & { code?: string } };
+    return { ok: false, reason: err.cause?.code ?? err.cause?.message ?? err.message };
   }
 }
 
 /**
- * Poll candidate IPs on `port`/api/service/status until one is healthy or we
- * time out. Returns the first IP that responded healthy, or null.
+ * Poll candidate IPs on `port`/api/service/status until healthy or timed out.
  *
- * Candidates are tried in order each tick; the first match wins. The user-
- * entered IP should be passed first so we prefer it when it works.
+ * Each tick tries direct HTTP probes first (fast path). If direct HTTP fails
+ * for all candidates — e.g. because the remote app rejects connections from
+ * the backend's IP — falls back to probing via SSH (curl 127.0.0.1 on the
+ * remote host itself), which bypasses any IP allowlist.
+ *
+ * Returns the first IP that responded healthy via HTTP (preferred for ongoing
+ * polling), or the entered IP when health was confirmed via SSH fallback.
  */
 export async function waitForHealthy(
   candidateIps: string[],
   port: number,
   io: IOServer,
   room: string,
+  sshCreds?: SshCreds,
 ): Promise<string | null> {
   const sessionId = sessionIdFromRoom(room);
   const ips = Array.from(new Set(candidateIps.filter((ip) => IPV4_RE.test(ip))));
@@ -106,19 +127,36 @@ export async function waitForHealthy(
 
   const deadline = Date.now() + env.sshPostInstallHealthcheckTimeoutMs;
   while (Date.now() < deadline) {
-    const results = await Promise.all(ips.map(async (ip) => ({ ip, result: await probeOnce(ip, port) })));
-    const winner = results.find((r) => r.result.ok);
-    if (winner) {
+    // Try direct HTTP on all candidates in parallel
+    const httpResults = await Promise.all(
+      ips.map(async (ip) => ({ ip, result: await probeOnceHttp(ip, port) })),
+    );
+    const httpWinner = httpResults.find((r) => r.result.ok);
+    if (httpWinner) {
       io.to(room).emit('provision:log', {
-        line: `Service is healthy at http://${winner.ip}:${port}`,
+        line: `Service is healthy at http://${httpWinner.ip}:${port}`,
         level: 'system',
         ts: Date.now(),
         sessionId,
       });
-      return winner.ip;
+      return httpWinner.ip;
     }
-    // Log why each candidate failed so the user can see the actual error
-    const failures = results
+
+    // Direct HTTP failed — try SSH fallback if creds available
+    if (sshCreds) {
+      const sshResult = await probeViaSsh(sshCreds, port);
+      if (sshResult.ok) {
+        io.to(room).emit('provision:log', {
+          line: `Service is healthy (confirmed via SSH). Note: port ${port} is not directly reachable from this backend — status polling may show as unreachable until firewall rules allow access.`,
+          level: 'system',
+          ts: Date.now(),
+          sessionId,
+        });
+        return sshCreds.ipAddress;
+      }
+    }
+
+    const failures = httpResults
       .map((r) => `${r.ip}: ${(r.result as { ok: false; reason: string }).reason}`)
       .join(' | ');
     io.to(room).emit('provision:log', {
@@ -129,8 +167,9 @@ export async function waitForHealthy(
     });
     await new Promise((r) => setTimeout(r, 3_000));
   }
+
   io.to(room).emit('provision:log', {
-    line: `Timed out waiting for service to become healthy on any of: ${list}`,
+    line: `Timed out waiting for service to become healthy`,
     level: 'stderr',
     ts: Date.now(),
     sessionId,

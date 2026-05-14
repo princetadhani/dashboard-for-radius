@@ -106,7 +106,7 @@ export function buildHostsRouter(io: IOServer): Router {
       };
       const discovered = await discoverHostIps(sshCreds);
       const candidates = Array.from(new Set([input.ipAddress, ...discovered]));
-      const workingIp = await waitForHealthy(candidates, input.port, io, room);
+      const workingIp = await waitForHealthy(candidates, input.port, io, room, sshCreds);
       if (!workingIp) {
         io.to(room).emit('provision:done', {
           success: false,
@@ -220,7 +220,7 @@ export function buildHostsRouter(io: IOServer): Router {
         ...previousKnown,
         ...discovered,
       ]));
-      const workingIp = await waitForHealthy(candidates, host.port, io, room);
+      const workingIp = await waitForHealthy(candidates, host.port, io, room, sshCreds);
 
       let updatedHost = host;
       if (workingIp) {
@@ -284,13 +284,19 @@ export function buildHostsRouter(io: IOServer): Router {
         return;
       }
 
+      const targetSshCreds = {
+        ipAddress: targetHost.ipAddress,
+        sshPort: input.target.sshPort,
+        sshUsername: input.target.sshUsername,
+        sshPassword: input.target.sshPassword,
+      };
       const previousKnown = parseStringList(targetHost.knownIps);
       const candidates = Array.from(new Set([
         ...(targetHost.controlIp ? [targetHost.controlIp] : []),
         targetHost.ipAddress,
         ...previousKnown,
       ]));
-      const workingIp = await waitForHealthy(candidates, targetHost.port, io, room);
+      const workingIp = await waitForHealthy(candidates, targetHost.port, io, room, targetSshCreds);
 
       let updatedTarget = targetHost;
       if (workingIp) {
