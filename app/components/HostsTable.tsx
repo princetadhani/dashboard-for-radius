@@ -286,7 +286,6 @@ export function HostsTable({
                 <td className="px-4 py-3 font-mono text-text-dim">
                   <IpAddressDisplay
                     primaryIp={h.ipAddress}
-                    controlIp={h.controlIp}
                     knownIps={h.knownIps}
                   />
                 </td>

@@ -7,21 +7,17 @@ import { CopyText } from "./CopyText";
 
 type Props = {
   primaryIp: string;
-  controlIp?: string | null;
   knownIps: string[];
 };
 
-export function IpAddressDisplay({ primaryIp, controlIp, knownIps }: Props) {
+export function IpAddressDisplay({ primaryIp, knownIps }: Props) {
   const [showPopover, setShowPopover] = useState(false);
   const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  // The IP currently being used for health checks
-  const activeIp = controlIp || primaryIp;
-
-  // Additional IPs (excluding the one already shown in main column)
-  const additionalIps = (knownIps || []).filter(ip => ip !== activeIp);
+  // Additional IPs (excluding primaryIp which is always shown in the main column)
+  const additionalIps = (knownIps || []).filter(ip => ip !== primaryIp);
   const hasAdditionalIps = additionalIps.length > 0;
 
   useEffect(() => {
@@ -56,11 +52,11 @@ export function IpAddressDisplay({ primaryIp, controlIp, knownIps }: Props) {
   }
 
   if (!hasAdditionalIps) {
-    // Only one IP (or additional IPs same as active) - simple display with copy
+    // Only one IP - simple display with copy
     return (
       <div className="flex items-center gap-2 min-w-0">
-        <CopyText value={activeIp} label="Copy address" className="min-w-0">
-          {activeIp}
+        <CopyText value={primaryIp} label="Copy address" className="min-w-0">
+          {primaryIp}
         </CopyText>
       </div>
     );
@@ -70,8 +66,8 @@ export function IpAddressDisplay({ primaryIp, controlIp, knownIps }: Props) {
   return (
     <>
       <div className="flex items-center gap-2 min-w-0">
-        <CopyText value={activeIp} label="Copy active address" className="min-w-0">
-          {activeIp}
+        <CopyText value={primaryIp} label="Copy address" className="min-w-0">
+          {primaryIp}
         </CopyText>
         <button
           ref={buttonRef}
