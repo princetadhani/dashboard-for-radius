@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ExternalLink,
@@ -17,7 +17,8 @@ import {
   Check,
   X,
 } from "lucide-react";
-import type { Host, HostStatusUpdate, SshActionType } from "../lib/types";
+import type { Host, SshActionType } from "../lib/types";
+import { useHostStatus } from "../lib/use-host-status";
 import { StatusDot } from "./StatusDot";
 import { TagList } from "./TagChips";
 import { IpAddressDisplay } from "./IpAddressDisplay";
@@ -55,7 +56,6 @@ const FLEX_COLS: ColKey[] = ["name", "endpoint"];
 
 type Props = {
   hosts: Host[];
-  statuses: Map<string, HostStatusUpdate>;
   sort: SortState;
   onSortChange: (s: SortState) => void;
   onEdit: (h: Host) => void;
@@ -83,9 +83,52 @@ function formatTs(ts?: number): string {
   return `${date} ${time}`;
 }
 
+const RowStatus = memo(function RowStatus({ hostId }: { hostId: string }) {
+  const s = useHostStatus(hostId);
+  const hostState = s?.reachable ? "up" : s ? "down" : "unknown";
+  const svcState = s?.service.healthy ? "up" : s ? "down" : "unknown";
+  return (
+    <>
+      <td className="px-4 py-3 text-center">
+        <div className="inline-flex items-center justify-center">
+          <StatusDot
+            state={hostState}
+            title={
+              hostState === "up"
+                ? "Reachable"
+                : hostState === "down"
+                  ? "Unreachable"
+                  : "Pending first probe"
+            }
+          />
+        </div>
+      </td>
+      <td className="px-4 py-3 text-center">
+        <div className="inline-flex items-center justify-center">
+          <StatusDot
+            state={svcState}
+            title={
+              svcState === "up"
+                ? `FreeRADIUS healthy (pid ${s?.service.pid ?? "?"})`
+                : svcState === "down"
+                  ? "FreeRADIUS not healthy"
+                  : "Pending"
+            }
+          />
+        </div>
+      </td>
+      <td
+        className="px-4 py-3 text-text-dim text-xs whitespace-nowrap overflow-hidden"
+        title={s?.service.healthy ? `pid ${s.service.pid} · ${formatMem(s.service.memory)}` : undefined}
+      >
+        {formatTs(s?.ts)}
+      </td>
+    </>
+  );
+});
+
 export function HostsTable({
   hosts,
-  statuses,
   sort,
   onSortChange,
   onEdit,
@@ -268,9 +311,6 @@ export function HostsTable({
         </thead>
         <tbody>
           {hosts.map((h) => {
-            const s = statuses.get(h.id);
-            const hostState = s?.reachable ? "up" : s ? "down" : "unknown";
-            const svcState = s?.service.healthy ? "up" : s ? "down" : "unknown";
             const launchUrl = `http://${h.ipAddress}:${h.port}`;
             const isConfirming = confirmId === h.id;
             return (
@@ -292,40 +332,7 @@ export function HostsTable({
                 <td className="px-4 py-3 overflow-hidden">
                   <TagList tags={h.tags} />
                 </td>
-                <td className="px-4 py-3 text-center">
-                  <div className="inline-flex items-center justify-center">
-                    <StatusDot
-                      state={hostState}
-                      title={
-                        hostState === "up"
-                          ? "Reachable"
-                          : hostState === "down"
-                            ? "Unreachable"
-                            : "Pending first probe"
-                      }
-                    />
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <div className="inline-flex items-center justify-center">
-                    <StatusDot
-                      state={svcState}
-                      title={
-                        svcState === "up"
-                          ? `FreeRADIUS healthy (pid ${s?.service.pid ?? "?"})`
-                          : svcState === "down"
-                            ? "FreeRADIUS not healthy"
-                            : "Pending"
-                      }
-                    />
-                  </div>
-                </td>
-                <td
-                  className="px-4 py-3 text-text-dim text-xs whitespace-nowrap overflow-hidden"
-                  title={s?.service.healthy ? `pid ${s.service.pid} · ${formatMem(s.service.memory)}` : undefined}
-                >
-                  {formatTs(s?.ts)}
-                </td>
+                <RowStatus hostId={h.id} />
                 <td className="px-2 py-3">
                   {isConfirming ? (
                     <div className="flex items-center justify-start gap-1">

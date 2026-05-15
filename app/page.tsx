@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import type { Host, HostStatusUpdate, SshActionType } from "./lib/types";
 import { fetchHosts, deleteHost } from "./lib/api";
 import { getSocket } from "./lib/socket";
+import { statusStore } from "./lib/status-store";
 import { HostsTable, type SortState } from "./components/HostsTable";
 import { SidePanel } from "./components/SidePanel";
 import { Toolbar, type StatusFilter } from "./components/Toolbar";
@@ -36,7 +37,10 @@ export default function DashboardPage() {
     const { hosts, statuses } = await fetchHosts();
     setHosts(hosts);
     const m = new Map<string, HostStatusUpdate>();
-    for (const s of statuses) m.set(s.hostId, s);
+    for (const s of statuses) {
+      m.set(s.hostId, s);
+      statusStore.set(s);
+    }
     setStatusMap(m);
   }, []);
 
@@ -53,6 +57,7 @@ export default function DashboardPage() {
     const socket = getSocket();
 
     const onStatus = (u: HostStatusUpdate) => {
+      statusStore.set(u);
       setStatusMap((prev) => {
         const next = new Map(prev);
         next.set(u.hostId, u);
@@ -68,6 +73,7 @@ export default function DashboardPage() {
     };
     const onDeleted = ({ id }: { id: string }) => {
       setHosts((prev) => prev.filter((p) => p.id !== id));
+      statusStore.delete(id);
       setStatusMap((prev) => {
         const next = new Map(prev);
         next.delete(id);
@@ -202,7 +208,6 @@ export default function DashboardPage() {
 
       <HostsTable
         hosts={filtered}
-        statuses={statusMap}
         sort={sort}
         onSortChange={setSort}
         onEdit={(h) => {
