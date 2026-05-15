@@ -1,6 +1,17 @@
+import { createConnection } from 'net';
 import type { Server as IOServer } from 'socket.io';
 import { prisma } from '../lib/prisma.js';
 import { env } from '../lib/env.js';
+
+/** TCP-connect to `host:port` to confirm the machine is up, without HTTP. */
+function tcpPing(host: string, port: number, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host, port });
+    const timer = setTimeout(() => { socket.destroy(); resolve(false); }, timeoutMs);
+    socket.once('connect', () => { clearTimeout(timer); socket.destroy(); resolve(true); });
+    socket.once('error', () => { clearTimeout(timer); resolve(false); });
+  });
+}
 
 export type ServiceSnapshot = {
   healthy: boolean;
@@ -113,18 +124,22 @@ type HostForProbe = {
 async function probeHost(io: IOServer, host: HostForProbe): Promise<HostStatusUpdate> {
   const preferred = host.controlIp ?? host.ipAddress;
 
-  // Fast path: probe the preferred IP only.
-  const fast = await probeOne(preferred, host.port);
+  // Run TCP ping (SSH port 22 — always open on managed hosts) and HTTP in parallel.
+  // This decouples host reachability from service health: the machine can be up
+  // even when the freeradius container is stopped/deleted.
+  const [tcpReachable, fast] = await Promise.all([
+    tcpPing(preferred, 22, 2_000),
+    probeOne(preferred, host.port),
+  ]);
+
+  // Host is reachable if SSH port responds OR HTTP responds (any non-connection-fail).
+  const reachable = tcpReachable || fast.kind !== 'fail';
+
   if (fast.kind === 'ok') {
-    return {
-      hostId: host.id,
-      reachable: true,
-      service: fast.snapshot,
-      ts: Date.now(),
-    };
+    return { hostId: host.id, reachable: true, service: fast.snapshot, ts: Date.now() };
   }
 
-  // Fallback: probe every other known IP in parallel.
+  // HTTP on preferred IP failed — try fallback IPs in parallel for service health.
   const allKnown = Array.from(
     new Set([host.ipAddress, ...parseStringList(host.knownIps)]),
   );
@@ -148,40 +163,19 @@ async function probeHost(io: IOServer, host: HostForProbe): Promise<HostStatusUp
       } catch {
         // host may have been deleted between findMany and update — ignore
       }
-      return {
-        hostId: host.id,
-        reachable: true,
-        service: winner.outcome.snapshot,
-        ts: Date.now(),
-      };
+      return { hostId: host.id, reachable: true, service: winner.outcome.snapshot, ts: Date.now() };
     }
-    // Fallback also produced no ok response; classify based on best info we have.
     if (winner && winner.outcome.kind === 'http-bad') {
-      return {
-        hostId: host.id,
-        reachable: true,
-        service: { healthy: false, status: 'unknown' },
-        ts: Date.now(),
-      };
+      return { hostId: host.id, reachable, service: { healthy: false, status: 'unknown' }, ts: Date.now() };
     }
   }
 
-  // Fast probe was http-bad means TCP up but body not ok → reachable, unhealthy.
   if (fast.kind === 'http-bad') {
-    return {
-      hostId: host.id,
-      reachable: true,
-      service: { healthy: false, status: 'unknown' },
-      ts: Date.now(),
-    };
+    return { hostId: host.id, reachable, service: { healthy: false, status: 'unknown' }, ts: Date.now() };
   }
 
-  return {
-    hostId: host.id,
-    reachable: false,
-    service: { healthy: false },
-    ts: Date.now(),
-  };
+  // No HTTP response from any IP — reachable is determined by TCP ping alone.
+  return { hostId: host.id, reachable, service: { healthy: false }, ts: Date.now() };
 }
 
 let timer: NodeJS.Timeout | null = null;
