@@ -100,16 +100,12 @@ export function IpAddressDisplay({ primaryIp, knownIps }: Props) {
             <div className="space-y-2">
               {additionalIps.map((ip) => {
                 return (
-                  <div
-                    key={ip}
-                    className="p-2 rounded-md bg-white/5 hover:bg-white/10 transition-colors overflow-hidden"
-                  >
+                  <div key={ip} className="p-2 rounded-md bg-white/5 overflow-hidden">
                     <div className="min-w-0 overflow-hidden">
                       <CopyText
                         value={ip}
                         label="Copy IP"
-                        className="font-mono text-sm w-full"
-                        textClassName="block truncate"
+                        className="font-mono text-sm max-w-full"
                       >
                         {ip}
                       </CopyText>
