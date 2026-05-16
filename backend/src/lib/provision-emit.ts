@@ -2,8 +2,15 @@ import type { Server as IOServer } from 'socket.io';
 
 export type LogLevel = 'info' | 'stderr' | 'system';
 
-const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g;
-const WGET_PROGRESS_RE = /\d+%\[[=>\s]*\]\s+\d+(\.\d+)?[KMGTP]?\s+\d+(\.\d+)?[KMGTP]?B\/s/;
+// Covers standard CSI sequences AND DEC private sequences (\x1b[?25l etc.)
+const ANSI_RE = /\x1b\[[0-9;?]*[A-Za-z]/g;
+// wget progress: "filename N%[==>  ] size speed"
+const WGET_PROGRESS_RE = /\d+%\[[\s=>-]*\]/;
+// Docker compose "[+] up N/N" status line
+const DOCKER_STATUS_RE = /^\[[\+\-!]\]\s+\S+\s+\d+\/\d+/;
+// Docker compose spinner: "⠋ Container foo Creating 0.1s" or "✔ Container foo Started 0.8s"
+const DOCKER_SPINNER_RE = /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏✔✗]\s+(Container|Network|Volume)\s+\S+\s+(Creating|Starting|Started|Running|Stopping|Stopped|Removing|Removed)/;
+
 const STEP_BRACKET_RE = /\[(\d+)\/(\d+)\]\s+(.+)/;
 const STEP_STAGE_RE = /Stage\s+(\d+)\/(\d+)\s*[:\-]?\s*(.+)/i;
 
@@ -19,9 +26,16 @@ export function makeEmitter(io: IOServer, room: string) {
 
   /** Classify and emit a single output line: drops noise, splits steps from logs. */
   const handleLine = (raw: string, defaultLevel: LogLevel = 'info') => {
-    const line = raw.replace(ANSI_RE, '').trim();
+    // Strip all ANSI/VT escape sequences (including DEC private like [?25l)
+    const stripped = raw.replace(ANSI_RE, '');
+    // For carriage-return based progress (apt, wget), keep only the last segment
+    const crParts = stripped.split('\r');
+    const line = crParts[crParts.length - 1]!.trim();
+
     if (line.length === 0) return;
     if (WGET_PROGRESS_RE.test(line)) return;
+    if (DOCKER_STATUS_RE.test(line)) return;
+    if (DOCKER_SPINNER_RE.test(line)) return;
 
     const m = line.match(STEP_BRACKET_RE) || line.match(STEP_STAGE_RE);
     if (m) {

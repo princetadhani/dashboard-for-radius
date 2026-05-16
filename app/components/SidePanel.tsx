@@ -170,7 +170,7 @@ export function SidePanel({ open, mode, editing, onClose, onSuccess }: Props) {
               </button>
             </header>
 
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+            <form id="provision-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
               <Field label="Friendly Name" required>
                 <input
                   required
@@ -283,6 +283,7 @@ export function SidePanel({ open, mode, editing, onClose, onSuccess }: Props) {
               </button>
               <button
                 type="submit"
+                form="provision-form"
                 disabled={phase === "provisioning" || formInvalid}
                 className={`px-4 py-2 rounded-md border flex items-center gap-2 transition-all ${phase === "provisioning" || formInvalid
                   ? "bg-neon-blue/10 border-neon-blue/30 text-neon-blue/50 cursor-not-allowed"
