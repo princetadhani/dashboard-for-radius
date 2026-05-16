@@ -35,6 +35,9 @@ export function SidePanel({ open, mode, editing, onClose, onSuccess }: Props) {
   const [logs, setLogs] = useState<ProvisionLog[]>([]);
   const [steps, setSteps] = useState<ProvisionStep[]>([]);
 
+  // Track if fields have been touched for real-time validation
+  const [ipTouched, setIpTouched] = useState(false);
+
   // Reset / hydrate when panel opens or mode/editing changes
   useEffect(() => {
     if (!open) return;
@@ -42,6 +45,7 @@ export function SidePanel({ open, mode, editing, onClose, onSuccess }: Props) {
       setFriendlyName(editing.friendlyName);
       setIpAddress(editing.ipAddress);
       setTags(editing.tags ?? []);
+      setIpTouched(true); // Already has a value
     } else {
       setFriendlyName("");
       setIpAddress("");
@@ -49,6 +53,7 @@ export function SidePanel({ open, mode, editing, onClose, onSuccess }: Props) {
       setSshPort(22);
       setSshUsername("");
       setSshPassword("");
+      setIpTouched(false);
     }
     setPhase("idle");
     setErrorMsg(null);
@@ -56,10 +61,11 @@ export function SidePanel({ open, mode, editing, onClose, onSuccess }: Props) {
     setSteps([]);
   }, [open, mode, editing]);
 
-  const addressError = ipAddress ? validateAddress(ipAddress) : null;
+  // Real-time validation - show error only after user has started typing
+  const addressError = ipTouched && ipAddress.trim() ? validateAddress(ipAddress) : null;
   const formInvalid = !!addressError || !ipAddress.trim() || !friendlyName.trim();
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -180,11 +186,17 @@ export function SidePanel({ open, mode, editing, onClose, onSuccess }: Props) {
                 <input
                   required
                   value={ipAddress}
-                  onChange={(e) => setIpAddress(e.target.value)}
+                  onChange={(e) => {
+                    setIpAddress(e.target.value);
+                    if (!ipTouched) setIpTouched(true);
+                  }}
+                  onBlur={() => setIpTouched(true)}
                   disabled={phase === "provisioning"}
                   placeholder="10.76.191.233 or radius.lab.example.com"
                   aria-invalid={!!addressError}
-                  className={`input w-full font-mono ${addressError ? "!border-neon-red focus:!border-neon-red" : ""
+                  className={`input w-full font-mono transition-colors ${addressError
+                      ? "!border-neon-red focus:!border-neon-red"
+                      : ""
                     }`}
                 />
               </Field>
@@ -271,9 +283,11 @@ export function SidePanel({ open, mode, editing, onClose, onSuccess }: Props) {
               </button>
               <button
                 type="submit"
-                onClick={handleSubmit}
                 disabled={phase === "provisioning" || formInvalid}
-                className="px-4 py-2 rounded-md bg-neon-blue/20 border border-neon-blue/50 text-neon-blue hover:bg-neon-blue/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className={`px-4 py-2 rounded-md border flex items-center gap-2 transition-all ${phase === "provisioning" || formInvalid
+                  ? "bg-neon-blue/10 border-neon-blue/30 text-neon-blue/50 cursor-not-allowed"
+                  : "bg-neon-blue/20 border-neon-blue/50 text-neon-blue hover:bg-neon-blue/30 hover:border-neon-blue hover:shadow-lg hover:shadow-neon-blue/20 cursor-pointer"
+                  }`}
               >
                 {phase === "provisioning" && <Loader2 size={16} className="animate-spin" />}
                 {mode === "edit"
