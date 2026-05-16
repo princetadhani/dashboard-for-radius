@@ -1,7 +1,6 @@
 import http from 'node:http';
 import express from 'express';
 import cors from 'cors';
-import rateLimit from 'express-rate-limit';
 import { Server as IOServer } from 'socket.io';
 import { env } from './lib/env.js';
 import { buildHostsRouter } from './routes/hosts.js';
@@ -19,17 +18,6 @@ app.use(express.json({ limit: '256kb' }));
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
-});
-
-const provisionLimiter = rateLimit({
-  windowMs: 60_000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use('/api/hosts', (req, res, next) => {
-  if (req.method === 'POST') return provisionLimiter(req, res, next);
-  next();
 });
 
 app.use('/api/hosts', buildHostsRouter(io));

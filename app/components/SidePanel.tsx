@@ -184,9 +184,8 @@ export function SidePanel({ open, mode, editing, onClose, onSuccess }: Props) {
                   disabled={phase === "provisioning"}
                   placeholder="10.76.191.233 or radius.lab.example.com"
                   aria-invalid={!!addressError}
-                  className={`input w-full font-mono ${
-                    addressError ? "!border-neon-red focus:!border-neon-red" : ""
-                  }`}
+                  className={`input w-full font-mono ${addressError ? "!border-neon-red focus:!border-neon-red" : ""
+                    }`}
                 />
               </Field>
 
@@ -215,7 +214,7 @@ export function SidePanel({ open, mode, editing, onClose, onSuccess }: Props) {
                       className="input font-mono w-32"
                     />
                   </Field>
-                  <Field label="SSH Username (with sudo)" required>
+                  <Field label="SSH Username (with sudo access)" required>
                     <input
                       required
                       value={sshUsername}
