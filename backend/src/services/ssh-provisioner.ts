@@ -15,9 +15,10 @@ export async function runProvision(
   io: IOServer,
   room: string,
   params: ProvisionParams,
+  scriptUrl?: string,
 ): Promise<ProvisionResult> {
   return runSshCommand(io, room, params, {
-    command: installScriptCommand(env.installScriptUrl),
+    command: installScriptCommand(scriptUrl ?? env.installScriptUrl),
     timeoutMs: env.sshInstallTimeoutMs,
   });
 }

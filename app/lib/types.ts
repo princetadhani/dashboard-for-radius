@@ -6,6 +6,7 @@ export type Host = {
   knownIps: string[];
   port: number;
   tags: string[];
+  installedVersion: string | null;
   createdAt: string;
   updatedAt: string;
 };

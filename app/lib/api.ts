@@ -71,6 +71,14 @@ export async function runHostAction(
   });
 }
 
+export async function fetchLatestRelease(): Promise<{ version: string; scriptUrl: string } | null> {
+  try {
+    return await jsonFetch<{ version: string; scriptUrl: string }>("/api/releases/latest");
+  } catch {
+    return null;
+  }
+}
+
 export async function copyConfig(
   sourceHostId: string,
   input: {

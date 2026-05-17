@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Radio } from "lucide-react";
 import { toast } from "sonner";
 import type { Host, HostStatusUpdate, SshActionType } from "./lib/types";
-import { fetchHosts, deleteHost } from "./lib/api";
+import { fetchHosts, deleteHost, fetchLatestRelease } from "./lib/api";
 import { getSocket } from "./lib/socket";
 import { statusStore } from "./lib/status-store";
 import { HostsTable, type SortState } from "./components/HostsTable";
@@ -17,6 +17,7 @@ export default function DashboardPage() {
   const [hosts, setHosts] = useState<Host[]>([]);
   const [statusMap, setStatusMap] = useState<Map<string, HostStatusUpdate>>(new Map());
   const [, setTick] = useState(0);
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
 
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelMode, setPanelMode] = useState<"create" | "edit">("create");
@@ -47,6 +48,10 @@ export default function DashboardPage() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  useEffect(() => {
+    void fetchLatestRelease().then((r) => setLatestVersion(r?.version ?? null));
+  }, []);
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 15_000);
@@ -226,6 +231,7 @@ export default function DashboardPage() {
         }}
         onAction={openSingleAction}
         onCopyConfig={(h) => setCopySource(h)}
+        latestVersion={latestVersion}
       />
 
       <SidePanel
@@ -241,6 +247,7 @@ export default function DashboardPage() {
         action={actionType}
         host={actionHost}
         onClose={() => setActionOpen(false)}
+        latestVersion={latestVersion}
       />
 
       <CopyConfigModal

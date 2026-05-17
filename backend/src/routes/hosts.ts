@@ -17,6 +17,7 @@ import {
 } from '../services/ssh-runner.js';
 import { runCopyConfig } from '../services/ssh-copy-config.js';
 import { getAllCachedStatuses, getCachedStatus } from '../services/status-poller.js';
+import { fetchLatestRelease } from '../lib/releases.js';
 
 type HostRow = {
   id: string;
@@ -26,6 +27,7 @@ type HostRow = {
   knownIps?: string | null;
   port: number;
   tags?: string | null;
+  installedVersion?: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -86,12 +88,13 @@ export function buildHostsRouter(io: IOServer): Router {
 
     queueMicrotask(async () => {
       const room = `provision:${sessionId}`;
+      const release = await fetchLatestRelease();
       const result = await runProvision(io, room, {
         ipAddress: input.ipAddress,
         sshPort: input.sshPort,
         sshUsername: input.sshUsername,
         sshPassword: input.sshPassword,
-      });
+      }, release?.scriptUrl);
 
       if (!result.success) {
         io.to(room).emit('provision:done', { success: false, error: result.error, sessionId });
@@ -124,6 +127,7 @@ export function buildHostsRouter(io: IOServer): Router {
           knownIps: JSON.stringify(candidates),
           port: input.port,
           tags: JSON.stringify(input.tags ?? []),
+          installedVersion: release?.version ?? null,
         },
       });
       const out = serialize(host);
@@ -175,10 +179,12 @@ export function buildHostsRouter(io: IOServer): Router {
     res.status(202).json({ sessionId });
 
     const input = parsed.data;
+    const release = input.action !== 'restart-service' ? await fetchLatestRelease() : null;
+    const scriptUrl = release?.scriptUrl ?? env.installScriptUrl;
     const command =
       input.action === 'restart-service'
         ? systemctlCommand('restart', 'freeradius')
-        : installScriptCommand(env.installScriptUrl);
+        : installScriptCommand(scriptUrl);
 
     queueMicrotask(async () => {
       const room = `provision:${sessionId}`;
@@ -232,12 +238,14 @@ export function buildHostsRouter(io: IOServer): Router {
         const controlIpChanged = desiredControlIp !== (host.controlIp ?? null);
         const knownIpsChanged =
           desiredKnownIps !== null && desiredKnownIps !== (host.knownIps ?? '[]');
-        if (controlIpChanged || knownIpsChanged) {
+        const versionChanged = release != null && release.version !== (host.installedVersion ?? null);
+        if (controlIpChanged || knownIpsChanged || versionChanged) {
           updatedHost = await prisma.host.update({
             where: { id: host.id },
             data: {
               controlIp: desiredControlIp,
               ...(desiredKnownIps !== null ? { knownIps: desiredKnownIps } : {}),
+              ...(versionChanged ? { installedVersion: release.version } : {}),
             },
           });
           io.emit('host:updated', serialize(updatedHost));

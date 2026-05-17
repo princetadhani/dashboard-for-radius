@@ -21,6 +21,7 @@ type Props = {
   action: SshActionType | null;
   host: Host | null;
   onClose: () => void;
+  latestVersion?: string | null;
 };
 
 const ACTION_LABELS: Record<SshActionType, { title: string; verb: string }> = {
@@ -31,7 +32,7 @@ const ACTION_LABELS: Record<SshActionType, { title: string; verb: string }> = {
 
 type Phase = "idle" | "running" | "success" | "error";
 
-export function SshActionModal({ open, action, host, onClose }: Props) {
+export function SshActionModal({ open, action, host, onClose, latestVersion }: Props) {
   const [sshPort, setSshPort] = useState(22);
   const [sshUsername, setSshUsername] = useState("");
   const [sshPassword, setSshPassword] = useState("");
@@ -53,6 +54,9 @@ export function SshActionModal({ open, action, host, onClose }: Props) {
 
   if (!action || !host) return null;
   const meta = ACTION_LABELS[action];
+  const hasUpdate = !!(action === "reinstall" && host.installedVersion && latestVersion && host.installedVersion !== latestVersion);
+  const title = hasUpdate ? `Update to ${latestVersion}` : meta.title;
+  const verb = hasUpdate ? `Update to ${latestVersion}` : meta.verb;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -92,12 +96,12 @@ export function SshActionModal({ open, action, host, onClose }: Props) {
 
         if (d.success) {
           setPhase("success");
-          toast.success(`${meta.verb} succeeded on ${host.friendlyName}`);
+          toast.success(`${verb} succeeded on ${host.friendlyName}`);
           setTimeout(() => onClose(), 1800);
         } else {
           setPhase("error");
           setErrorMsg(d.error);
-          toast.error(`${meta.verb} failed: ${d.error}`);
+          toast.error(`${verb} failed: ${d.error}`);
         }
       };
 
@@ -132,7 +136,7 @@ export function SshActionModal({ open, action, host, onClose }: Props) {
           >
             <header className="flex items-center justify-between px-6 py-4 border-b border-border gap-3">
               <div className="min-w-0 flex-1">
-                <h2 className="text-lg font-semibold truncate">{meta.title}</h2>
+                <h2 className="text-lg font-semibold truncate">{title}</h2>
                 <p
                   className="text-xs text-text-dim mt-0.5 truncate"
                   title={host.friendlyName}

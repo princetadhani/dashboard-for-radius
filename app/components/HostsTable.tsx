@@ -62,6 +62,7 @@ type Props = {
   onDelete: (h: Host) => void;
   onAction: (h: Host, action: SshActionType) => void;
   onCopyConfig: (source: Host) => void;
+  latestVersion?: string | null;
 };
 
 function formatMem(bytes?: number): string {
@@ -135,6 +136,7 @@ export function HostsTable({
   onDelete,
   onAction,
   onCopyConfig,
+  latestVersion,
 }: Props) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -313,14 +315,22 @@ export function HostsTable({
           {hosts.map((h) => {
             const launchUrl = `http://${h.ipAddress}:${h.port}`;
             const isConfirming = confirmId === h.id;
+            const hasUpdate = !!(h.installedVersion && latestVersion && h.installedVersion !== latestVersion);
             return (
               <tr
                 key={h.id}
                 className="border-b border-border/60 hover:bg-white/5 transition-colors"
               >
                 <td className="px-4 py-3">
-                  <div className="font-medium truncate" title={h.friendlyName}>
-                    {h.friendlyName}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-medium truncate" title={h.friendlyName}>
+                      {h.friendlyName}
+                    </span>
+                    {hasUpdate && (
+                      <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-neon-blue/15 border border-neon-blue/30 text-neon-blue font-medium leading-none">
+                        ↑ {latestVersion}
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="px-4 py-3 font-mono text-text-dim">
@@ -400,6 +410,7 @@ export function HostsTable({
         (() => {
           const host = hosts.find((h) => h.id === menuOpenId);
           if (!host) return null;
+          const menuHasUpdate = !!(host.installedVersion && latestVersion && host.installedVersion !== latestVersion);
           const style: React.CSSProperties = {
             position: "fixed",
             right: menuPos.right,
@@ -417,7 +428,7 @@ export function HostsTable({
               />
               <MenuItem
                 icon={<RefreshCw size={14} />}
-                label="Reinstall / Repair"
+                label={menuHasUpdate ? `Update to ${latestVersion}` : "Reinstall / Repair"}
                 onClick={() => { onAction(host, "reinstall"); setMenuOpenId(null); setMenuPos(null); }}
               />
               <div className="border-t border-border my-1" />
