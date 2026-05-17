@@ -160,7 +160,7 @@ export default function DashboardPage() {
           </div>
           <div>
             <h1 className="text-xl font-semibold tracking-tight">RADIUSCTRL</h1>
-            <p className="text-xs text-text-dim">FreeRADIUS Fleet Dashboard</p>
+            <p className="text-xs text-text-dim">Provision, monitor & manage your FreeRADIUS servers</p>
           </div>
         </div>
 
