@@ -17,8 +17,9 @@ type PhaseGroup = { steps: ProvisionStep[]; nested: boolean };
 
 /**
  * Groups steps into outer and nested phases.
- * When n resets to 1 after n > 1, a sub-script started — mark those as nested.
- * When n exceeds the outer watermark again, we've returned to the outer script.
+ * Sub-phase starts when n resets to 1 after n > 1.
+ * Return to outer requires (outerN+1, outerTotal) exact match so sub-script
+ * steps that exceed the outer watermark aren't mis-classified as outer.
  */
 function buildPhaseGroups(all: ProvisionStep[]): PhaseGroup[] {
   if (all.length === 0) return [];
@@ -27,24 +28,29 @@ function buildPhaseGroups(all: ProvisionStep[]): PhaseGroup[] {
   let buf: ProvisionStep[] = [all[0]];
   let nested = false;
   let outerN = all[0].n;
+  let outerTotal = all[0].total;
 
   for (let i = 1; i < all.length; i++) {
     const s = all[i];
     const prev = buf[buf.length - 1]!;
 
     if (s.n === 1 && prev.n > 1 && !nested) {
-      // Sub-script started its own counter
+      // Sub-script restarted its own counter from 1
       groups.push({ steps: buf, nested: false });
       buf = [s];
       nested = true;
-    } else if (nested && s.n > outerN) {
-      // Outer script resumed with a higher n
+    } else if (nested && s.n === outerN + 1 && s.total === outerTotal) {
+      // Outer script resumed with exactly the next expected (n, total) pair
       groups.push({ steps: buf, nested: true });
       buf = [s];
       nested = false;
       outerN = s.n;
+      outerTotal = s.total;
     } else {
-      if (!nested) outerN = s.n;
+      if (!nested) {
+        outerN = s.n;
+        outerTotal = s.total;
+      }
       buf.push(s);
     }
   }
@@ -53,10 +59,17 @@ function buildPhaseGroups(all: ProvisionStep[]): PhaseGroup[] {
   return groups;
 }
 
+type RenderStep = {
+  step: ProvisionStep;
+  nested: boolean;
+  displayN: number;
+  displayTotal: number;
+  stepStatus: Status;
+};
+
 export function Stepper({ steps, logs, status, errorMsg }: Props) {
   const logRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll terminal to bottom on new log lines
   useEffect(() => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -68,21 +81,42 @@ export function Stepper({ steps, logs, status, errorMsg }: Props) {
   const lastGroup = groups[groups.length - 1];
   const currentStep = lastGroup?.steps[lastGroup.steps.length - 1];
 
-  // Progress derived from the outer script's counter only
-  const progressN = lastOuter ? Math.min(lastOuter.n, lastOuter.total) : 0;
-  const progressTotal = lastOuter?.total ?? 0;
-  const progressPct = progressTotal > 0 ? Math.round((progressN / progressTotal) * 100) : 0;
+  // Canonical total settles to the last outer step's total (e.g. 5 once [3/5] arrives).
+  // React re-renders everything, so earlier [1/6]/[2/6] auto-correct to [1/5]/[2/5].
+  const canonicalTotal = lastOuter?.total ?? 0;
+  const progressN = outerSteps.length;
+  const progressPct = canonicalTotal > 0 ? Math.round((progressN / canonicalTotal) * 100) : 0;
 
-  // Pending outer steps: only show when we're still in an outer group
   const lastGroupIsNested = lastGroup?.nested ?? false;
   const pendingCount =
-    status === "running" && !lastGroupIsNested && lastOuter
-      ? Math.max(0, lastOuter.total - lastOuter.n)
+    status === "running" && !lastGroupIsNested && canonicalTotal > 0
+      ? Math.max(0, canonicalTotal - outerSteps.length)
       : 0;
 
-  // Overall last step index (for status icon assignment)
+  // Pre-compute flat render list to avoid mutable counters inside JSX
   const totalStepCount = groups.reduce((acc, g) => acc + g.steps.length, 0);
-  let stepCounter = 0;
+  let outerIdx = 0;
+  let globalIdx = 0;
+  const renderSteps: RenderStep[] = groups.flatMap((group) =>
+    group.steps.map((s) => {
+      globalIdx++;
+      const isOverallLast = globalIdx === totalStepCount;
+      const stepStatus: Status =
+        isOverallLast && status === "running"
+          ? "running"
+          : isOverallLast && status === "error"
+            ? "error"
+            : "success";
+      return {
+        step: s,
+        nested: group.nested,
+        // Outer steps use position index + canonical total; sub-steps keep their own
+        displayN: group.nested ? s.n : ++outerIdx,
+        displayTotal: group.nested ? s.total : canonicalTotal,
+        stepStatus,
+      };
+    })
+  );
 
   const progressColor =
     status === "success"
@@ -94,20 +128,20 @@ export function Stepper({ steps, logs, status, errorMsg }: Props) {
   return (
     <div className="flex flex-col gap-3">
       {/* ── Progress bar ── */}
-      {progressTotal > 0 && (
+      {canonicalTotal > 0 && (
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-xs text-text-dim font-mono truncate pr-3 max-w-[80%]">
               {status === "success"
-                ? `All ${progressTotal} steps complete`
+                ? `All ${canonicalTotal} steps complete`
                 : status === "error"
-                  ? `Failed at step ${progressN} of ${progressTotal}`
+                  ? `Failed at step ${progressN} of ${canonicalTotal}`
                   : currentStep
                     ? currentStep.label
                     : "Starting…"}
             </span>
-            <span className="text-xs font-mono tabular-nums text-text-dim shrink-0">
-              {progressN}/{progressTotal}
+            <span className="text-xs font-mono tabular text-text-dim shrink-0">
+              {progressN}/{canonicalTotal}
             </span>
           </div>
           <div className="h-1 rounded-full bg-white/10 overflow-hidden">
@@ -119,36 +153,26 @@ export function Stepper({ steps, logs, status, errorMsg }: Props) {
         </div>
       )}
 
-      {/* ── Step list (outer + nested) ── */}
-      {groups.length > 0 && (
+      {/* ── Step list ── */}
+      {renderSteps.length > 0 && (
         <ol className="space-y-1">
-          {groups.map((group, gi) =>
-            group.steps.map((s, _si) => {
-              stepCounter++;
-              const isOverallLast = stepCounter === totalStepCount;
-              const stepStatus: Status =
-                isOverallLast && status === "running"
-                  ? "running"
-                  : isOverallLast && status === "error"
-                    ? "error"
-                    : "success";
-              return (
-                <StepItem
-                  key={`${gi}-${s.n}-${s.ts}`}
-                  step={s}
-                  status={stepStatus}
-                  nested={group.nested}
-                />
-              );
-            })
-          )}
+          {renderSteps.map(({ step, nested, displayN, displayTotal, stepStatus }, i) => (
+            <StepItem
+              key={`${i}-${step.ts}`}
+              step={step}
+              status={stepStatus}
+              nested={nested}
+              displayN={displayN}
+              displayTotal={displayTotal}
+            />
+          ))}
 
-          {/* Pending placeholders for remaining outer steps */}
+          {/* Pending outer-step placeholders */}
           {Array.from({ length: pendingCount }).map((_, i) => (
             <li key={`pending-${i}`} className="flex items-center gap-2.5">
               <Circle size={13} className="shrink-0 text-white/20" />
               <span className="font-mono text-xs text-white/20">
-                [{(lastOuter?.n ?? 0) + i + 1}/{progressTotal}]
+                [{outerSteps.length + i + 1}/{canonicalTotal}]
               </span>
               <span className="text-xs text-white/20">Pending</span>
             </li>
@@ -164,16 +188,10 @@ export function Stepper({ steps, logs, status, errorMsg }: Props) {
         </div>
       )}
 
-      {/* ── Terminal panel (always visible, auto-scrolls) ── */}
+      {/* ── Terminal panel ── */}
       {logs.length > 0 && (
         <div className="rounded-md border border-border overflow-hidden">
-          {/* Title bar */}
           <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border-b border-border">
-            <span className="flex gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
-              <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
-              <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
-            </span>
             <span className="text-xs text-text-dim font-mono ml-1 flex-1">
               console output
             </span>
@@ -190,8 +208,6 @@ export function Stepper({ steps, logs, status, errorMsg }: Props) {
               <span className="text-xs text-neon-red font-mono">error</span>
             )}
           </div>
-
-          {/* Log body */}
           <div
             ref={logRef}
             className="overflow-y-auto bg-black/60 p-3 font-mono text-xs leading-relaxed"
@@ -225,10 +241,14 @@ function StepItem({
   step,
   status,
   nested,
+  displayN,
+  displayTotal,
 }: {
   step: ProvisionStep;
   status: Status;
   nested: boolean;
+  displayN: number;
+  displayTotal: number;
 }) {
   const icon =
     status === "success" ? (
@@ -242,10 +262,8 @@ function StepItem({
   return (
     <li className={`flex items-center gap-2.5 ${nested ? "ml-5" : ""}`}>
       {icon}
-      <span
-        className={`font-mono text-xs shrink-0 ${nested ? "text-white/25" : "text-text-dim"}`}
-      >
-        [{step.n}/{step.total}]
+      <span className={`font-mono text-xs shrink-0 ${nested ? "text-white/25" : "text-text-dim"}`}>
+        [{displayN}/{displayTotal}]
       </span>
       <span
         className={

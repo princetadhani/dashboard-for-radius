@@ -124,7 +124,7 @@ export function SidePanel({ open, mode, editing, onClose, onSuccess }: Props) {
         socket.emit("provision:unsubscribe", sessionId);
         if (result.success) {
           setPhase("success");
-          setTimeout(() => { onSuccess?.(); onClose(); }, 1800);
+          onSuccess?.();
         } else {
           setPhase("error");
           setErrorMsg(result.error);
