@@ -172,7 +172,6 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3">
           <Stat label="Hosts" value={summary.total} />
           <Stat label="Online" value={summary.online} accent="green" />
-          <Stat label="Healthy" value={summary.healthy} accent="green" />
           <button
             onClick={() => {
               setPanelMode("create");

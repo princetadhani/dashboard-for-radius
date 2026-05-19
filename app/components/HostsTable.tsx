@@ -29,12 +29,12 @@ export type SortState = { key: SortKey; dir: "asc" | "desc" } | null;
 type ColKey = "name" | "endpoint" | "tags" | "host" | "service" | "lastSync" | "actions";
 
 const DEFAULT_WIDTHS: Record<ColKey, number> = {
-  name: 200,
-  endpoint: 180,
+  name: 180,
+  endpoint: 160,
   tags: 200,
   host: 70,
-  service: 70,
-  lastSync: 150,
+  service: 140,
+  lastSync: 160,
   actions: 150,
 };
 
@@ -43,8 +43,8 @@ const MIN_WIDTHS: Record<ColKey, number> = {
   endpoint: 120,
   tags: 80,
   host: 60,
-  service: 60,
-  lastSync: 120,
+  service: 140,
+  lastSync: 130,
   actions: 150,
 };
 
@@ -119,7 +119,7 @@ const RowStatus = memo(function RowStatus({ hostId }: { hostId: string }) {
         </div>
       </td>
       <td
-        className="px-4 py-3 text-text-dim text-xs whitespace-nowrap overflow-hidden"
+        className="pl-8 pr-4 py-3 text-text-dim text-xs whitespace-nowrap overflow-hidden"
         title={s?.service.healthy ? `pid ${s.service.pid} · ${formatMem(s.service.memory)}` : undefined}
       >
         {formatTs(s?.ts)}
@@ -303,8 +303,8 @@ export function HostsTable({
               <ResizeHandle col="tags" />
             </th>
             <th className="px-4 py-3 font-medium text-center relative">Host</th>
-            <th className="px-4 py-3 font-medium text-center relative">Service</th>
-            <th className="px-4 py-3 font-medium relative">
+            <th className="px-4 py-3 font-medium text-center relative whitespace-nowrap">Radius Service</th>
+            <th className="pl-8 pr-4 py-3 font-medium relative">
               Last Sync
               <ResizeHandle col="lastSync" />
             </th>
