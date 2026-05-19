@@ -38,3 +38,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# sqlite database (created at runtime by docker/entrypoint.sh)
+data/
+*.db
+*.db-journal

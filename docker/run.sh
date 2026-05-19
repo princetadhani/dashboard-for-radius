@@ -7,7 +7,12 @@ CONTAINER_NAME="${CONTAINER_NAME:-radius-dashboard}"
 HOST_PORT="${HOST_PORT:-80}"
 DATA_DIR="${DATA_DIR:-$(pwd)/data}"
 
-mkdir -p "$DATA_DIR"
+if [ ! -d "$DATA_DIR" ]; then
+  echo ">> Creating data directory: $DATA_DIR"
+  mkdir -p "$DATA_DIR"
+else
+  echo ">> Using existing data directory: $DATA_DIR"
+fi
 
 # If a container with this name already exists (running or stopped), remove it.
 if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
