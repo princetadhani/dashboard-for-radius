@@ -25,6 +25,7 @@ export type HostStatusUpdate = {
   reachable: boolean;
   service: ServiceSnapshot;
   ts: number;
+  resolvedIps?: string[];
 };
 
 export type ProvisionLog = {

@@ -84,6 +84,17 @@ function formatTs(ts?: number): string {
   return `${date} ${time}`;
 }
 
+const EndpointCell = memo(function EndpointCell({ host }: { host: Host }) {
+  const s = useHostStatus(host.id);
+  return (
+    <IpAddressDisplay
+      primaryIp={host.ipAddress}
+      knownIps={host.knownIps}
+      resolvedIps={s?.resolvedIps}
+    />
+  );
+});
+
 const RowStatus = memo(function RowStatus({ hostId }: { hostId: string }) {
   const s = useHostStatus(hostId);
   const hostState = s?.reachable ? "up" : s ? "down" : "unknown";
@@ -334,10 +345,7 @@ export function HostsTable({
                   </div>
                 </td>
                 <td className="px-4 py-3 font-mono text-text-dim">
-                  <IpAddressDisplay
-                    primaryIp={h.ipAddress}
-                    knownIps={h.knownIps}
-                  />
+                  <EndpointCell host={h} />
                 </td>
                 <td className="px-4 py-3 overflow-hidden">
                   <TagList tags={h.tags} />

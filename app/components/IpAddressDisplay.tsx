@@ -2,27 +2,35 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Network } from "lucide-react";
+import { Network, MapPin, AlertTriangle } from "lucide-react";
 import { CopyText } from "./CopyText";
 
 type Props = {
   primaryIp: string;
   knownIps: string[];
+  resolvedIps?: string[];
 };
 
-export function IpAddressDisplay({ primaryIp, knownIps }: Props) {
+export function IpAddressDisplay({ primaryIp, knownIps, resolvedIps }: Props) {
   const [showPopover, setShowPopover] = useState(false);
   const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  // Additional IPs (excluding primaryIp which is always shown in the main column)
+  // IPs discovered on the host's interfaces (excluding the primary shown in the column)
   const additionalIps = (knownIps || []).filter(ip => ip !== primaryIp);
-  const hasAdditionalIps = additionalIps.length > 0;
+
+  // IPs the hostname resolved to that are NOT in knownIps — meaning the DNS record
+  // points to an IP not found on any discovered interface (NAT, stale record, etc.)
+  const dnsOnlyIps = (resolvedIps ?? []).filter(
+    ip => ip !== primaryIp && !(knownIps || []).includes(ip)
+  );
+
+  const totalCount = additionalIps.length + dnsOnlyIps.length;
+  const hasAdditionalIps = totalCount > 0;
 
   useEffect(() => {
     if (!showPopover) return;
-
     function handleClickOutside(e: MouseEvent) {
       if (
         popoverRef.current &&
@@ -33,14 +41,12 @@ export function IpAddressDisplay({ primaryIp, knownIps }: Props) {
         setShowPopover(false);
       }
     }
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showPopover]);
 
   function togglePopover() {
     if (!buttonRef.current) return;
-
     if (!showPopover) {
       const rect = buttonRef.current.getBoundingClientRect();
       setPopoverPos({
@@ -52,7 +58,6 @@ export function IpAddressDisplay({ primaryIp, knownIps }: Props) {
   }
 
   if (!hasAdditionalIps) {
-    // Only one IP - simple display with copy
     return (
       <div className="flex items-center gap-2 min-w-0">
         <CopyText value={primaryIp} label="Copy address" className="min-w-0">
@@ -62,7 +67,6 @@ export function IpAddressDisplay({ primaryIp, knownIps }: Props) {
     );
   }
 
-  // Multiple IPs - show active IP with badge for additional ones
   return (
     <>
       <div className="flex items-center gap-2 min-w-0">
@@ -73,10 +77,10 @@ export function IpAddressDisplay({ primaryIp, knownIps }: Props) {
           ref={buttonRef}
           onClick={togglePopover}
           className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] bg-neon-blue/20 text-neon-blue border border-neon-blue/30 hover:bg-neon-blue/30 transition-colors"
-          title={`${additionalIps.length} additional IP${additionalIps.length > 1 ? 's' : ''} detected`}
+          title={`${totalCount} additional IP${totalCount > 1 ? 's' : ''} detected`}
         >
           <Network size={12} className="inline mr-1" />
-          +{additionalIps.length}
+          +{totalCount}
         </button>
       </div>
 
@@ -86,37 +90,57 @@ export function IpAddressDisplay({ primaryIp, knownIps }: Props) {
         createPortal(
           <div
             ref={popoverRef}
-            style={{
-              position: "absolute",
-              top: popoverPos.top,
-              left: popoverPos.left,
-              zIndex: 9999,
-            }}
-            className="w-67 popover rounded-md p-3"
+            style={{ position: "absolute", top: popoverPos.top, left: popoverPos.left, zIndex: 9999 }}
+            className="w-72 popover rounded-md p-3"
           >
             <div className="text-xs font-semibold text-text-dim uppercase tracking-wider mb-3">
               Additional IP Addresses
             </div>
+
             <div className="space-y-2">
+              {/* Discovered interface IPs */}
               {additionalIps.map((ip) => {
+                const isResolved = resolvedIps?.includes(ip);
                 return (
-                  <div key={ip} className="p-2 rounded-md bg-white/5 overflow-hidden">
-                    <div className="min-w-0 overflow-hidden">
-                      <CopyText
-                        value={ip}
-                        label="Copy IP"
-                        className="font-mono text-sm max-w-full"
-                      >
-                        {ip}
-                      </CopyText>
-                      <div className="text-[10px] text-text-dim mt-0.5">
-                        Discovered interface
-                      </div>
+                  <div
+                    key={ip}
+                    className={`p-2 rounded-md overflow-hidden ${isResolved ? "bg-neon-green/10 border border-neon-green/25" : "bg-white/5"}`}
+                  >
+                    <CopyText value={ip} label="Copy IP" className="font-mono text-sm max-w-full">
+                      {ip}
+                    </CopyText>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {isResolved ? (
+                        <>
+                          <MapPin size={9} className="text-neon-green shrink-0" />
+                          <span className="text-[10px] text-neon-green font-medium">
+                            IP Resolved from hostname
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-[10px] text-text-dim">Discovered interface</span>
+                      )}
                     </div>
                   </div>
                 );
               })}
+
+              {/* DNS-only IPs — resolved but not found on any discovered interface */}
+              {dnsOnlyIps.map((ip) => (
+                <div key={ip} className="p-2 rounded-md overflow-hidden bg-yellow-500/10 border border-yellow-500/25">
+                  <CopyText value={ip} label="Copy IP" className="font-mono text-sm max-w-full">
+                    {ip}
+                  </CopyText>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <AlertTriangle size={9} className="text-yellow-400 shrink-0" />
+                    <span className="text-[10px] text-yellow-400 font-medium">
+                      Resolved by DNS, IP missing on radius-server
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
+
             <div className="mt-3 pt-2 border-t border-border text-[10px] text-text-dim">
               <p>
                 These are additional IP addresses discovered on this host.
