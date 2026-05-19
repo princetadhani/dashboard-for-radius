@@ -10,6 +10,7 @@ import {
   updateHostSchema,
 } from '../lib/validation.js';
 import { discoverHostIps, runProvision, waitForHealthy } from '../services/ssh-provisioner.js';
+import { isHostname } from '../lib/dns-resolver.js';
 import {
   installScriptCommand,
   runSshCommand,
@@ -108,8 +109,11 @@ export function buildHostsRouter(io: IOServer): Router {
         sshPassword: input.sshPassword,
       };
       const discovered = await discoverHostIps(sshCreds);
+      // candidates includes ipAddress for health-checking (waitForHealthy filters non-IPs itself)
       const candidates = Array.from(new Set([input.ipAddress, ...discovered]));
       const healthResult = await waitForHealthy(candidates, input.port, io, room, sshCreds);
+      // knownIps stores only numeric IPs — hostname lives in ipAddress column, not here
+      const numericIps = isHostname(input.ipAddress) ? discovered : candidates;
       if (!healthResult) {
         io.to(room).emit('provision:done', {
           success: false,
@@ -124,7 +128,7 @@ export function buildHostsRouter(io: IOServer): Router {
           friendlyName: input.friendlyName,
           ipAddress: input.ipAddress,
           controlIp: healthResult.ip === input.ipAddress ? null : healthResult.ip,
-          knownIps: JSON.stringify(candidates),
+          knownIps: JSON.stringify(numericIps),
           port: input.port,
           tags: JSON.stringify(input.tags ?? []),
           installedVersion: release?.version ?? null,
@@ -231,10 +235,13 @@ export function buildHostsRouter(io: IOServer): Router {
       let updatedHost = host;
       if (healthResult) {
         const desiredControlIp = healthResult.ip === host.ipAddress ? null : healthResult.ip;
+        // Only update knownIps when we have fresh discoveries — if ip addr failed
+        // (discovered is empty), leave knownIps untouched rather than overwriting
+        // with just the hostname. Hostname is never stored in knownIps.
         const desiredKnownIps =
-          input.action === 'restart-service'
+          input.action === 'restart-service' || discovered.length === 0
             ? null
-            : JSON.stringify(Array.from(new Set([host.ipAddress, ...discovered])));
+            : JSON.stringify(Array.from(new Set(discovered)));
         const controlIpChanged = desiredControlIp !== (host.controlIp ?? null);
         const knownIpsChanged =
           desiredKnownIps !== null && desiredKnownIps !== (host.knownIps ?? '[]');

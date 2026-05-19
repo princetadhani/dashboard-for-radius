@@ -1,34 +1,8 @@
 import { createConnection } from 'net';
-import { promises as dnsPromises } from 'dns';
 import type { Server as IOServer } from 'socket.io';
 import { prisma } from '../lib/prisma.js';
 import { env } from '../lib/env.js';
-
-/** Returns true if the string is a hostname rather than a bare IPv4/IPv6 address. */
-function isHostname(s: string): boolean {
-  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(s)) return false; // IPv4
-  if (s.includes(':')) return false;                      // IPv6
-  return true;
-}
-
-// Ordered list of DNS servers to try. The Resolver will fall back through
-// them automatically: private/on-prem DNS first, then public resolvers.
-const DNS_SERVERS = ['10.14.0.1', '8.8.8.8', '1.1.1.1'];
-
-/**
- * Resolve a hostname to ALL its A-record IPs using the configured DNS servers.
- * Returns an empty array on any failure (NXDOMAIN, timeout, etc.).
- */
-async function resolveToIps(hostname: string): Promise<string[]> {
-  // timeout: ms per query attempt per server; tries: attempts per server before moving on.
-  const resolver = new dnsPromises.Resolver({ timeout: 3_000, tries: 1 });
-  resolver.setServers(DNS_SERVERS);
-  try {
-    return await resolver.resolve4(hostname);
-  } catch {
-    return [];
-  }
-}
+import { isHostname, resolveHostname } from '../lib/dns-resolver.js';
 
 /** TCP-connect to `host:port` to confirm the machine is up, without HTTP. */
 function tcpPing(host: string, port: number, timeoutMs: number): Promise<boolean> {
@@ -153,7 +127,7 @@ async function probeHost(io: IOServer, host: HostForProbe): Promise<HostStatusUp
   // If the user stored a hostname (not a bare IP), resolve all its A-records once
   // so the UI can identify which discovered interface IPs the hostname maps to.
   const resolvedIps = isHostname(host.ipAddress)
-    ? await resolveToIps(host.ipAddress)
+    ? await resolveHostname(host.ipAddress)
     : undefined;
 
   const preferred = host.controlIp ?? host.ipAddress;

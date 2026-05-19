@@ -2,8 +2,20 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Network, MapPin, AlertTriangle } from "lucide-react";
+import { Network, Globe, AlertTriangle } from "lucide-react";
 import { CopyText } from "./CopyText";
+
+function DnsFailGlobe() {
+  return (
+    <span className="relative inline-flex items-center group cursor-default">
+      <Globe size={12} className="text-red-500 shrink-0" />
+      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-[11px] text-white whitespace-nowrap rounded-xl border border-white/25 backdrop-blur-md bg-white/10 shadow-[0_8px_20px_rgba(0,0,0,0.4),inset_0_0_10px_rgba(255,255,255,0.08)] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 pointer-events-none z-[9999]">
+        DNS resolution failed — this hostname could not be resolved
+        <span className="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-white/25" />
+      </span>
+    </span>
+  );
+}
 
 type Props = {
   primaryIp: string;
@@ -28,6 +40,9 @@ export function IpAddressDisplay({ primaryIp, knownIps, resolvedIps }: Props) {
 
   const totalCount = additionalIps.length + dnsOnlyIps.length;
   const hasAdditionalIps = totalCount > 0;
+
+  // resolvedIps defined (hostname was entered) but empty = DNS resolution failed
+  const dnsFailed = resolvedIps !== undefined && resolvedIps.length === 0;
 
   useEffect(() => {
     if (!showPopover) return;
@@ -63,6 +78,9 @@ export function IpAddressDisplay({ primaryIp, knownIps, resolvedIps }: Props) {
         <CopyText value={primaryIp} label="Copy address" className="min-w-0">
           {primaryIp}
         </CopyText>
+        {dnsFailed && (
+          <DnsFailGlobe />
+        )}
       </div>
     );
   }
@@ -73,15 +91,23 @@ export function IpAddressDisplay({ primaryIp, knownIps, resolvedIps }: Props) {
         <CopyText value={primaryIp} label="Copy address" className="min-w-0">
           {primaryIp}
         </CopyText>
-        <button
-          ref={buttonRef}
-          onClick={togglePopover}
-          className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] bg-neon-blue/20 text-neon-blue border border-neon-blue/30 hover:bg-neon-blue/30 transition-colors"
-          title={`${totalCount} additional IP${totalCount > 1 ? 's' : ''} detected`}
-        >
-          <Network size={12} className="inline mr-1" />
-          +{totalCount}
-        </button>
+        {dnsFailed && (
+          <DnsFailGlobe />
+        )}
+        <span className="relative inline-flex items-center group/badge">
+          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-[11px] text-white whitespace-nowrap rounded-xl border border-white/25 backdrop-blur-md bg-white/10 shadow-[0_8px_20px_rgba(0,0,0,0.4),inset_0_0_10px_rgba(255,255,255,0.08)] opacity-0 invisible group-hover/badge:opacity-100 group-hover/badge:visible transition-all duration-150 pointer-events-none z-[9999]">
+            {totalCount} additional IP{totalCount > 1 ? 's' : ''} detected
+            <span className="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-white/25" />
+          </span>
+          <button
+            ref={buttonRef}
+            onClick={togglePopover}
+            className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] bg-neon-blue/20 text-neon-blue border border-neon-blue/30 hover:bg-neon-blue/30 transition-colors"
+          >
+            <Network size={12} className="inline mr-1" />
+            +{totalCount}
+          </button>
+        </span>
       </div>
 
       {showPopover &&
@@ -112,7 +138,7 @@ export function IpAddressDisplay({ primaryIp, knownIps, resolvedIps }: Props) {
                     <div className="flex items-center gap-1 mt-0.5">
                       {isResolved ? (
                         <>
-                          <MapPin size={9} className="text-neon-green shrink-0" />
+                          <Globe size={9} className="text-neon-green shrink-0" />
                           <span className="text-[10px] text-neon-green font-medium">
                             IP Resolved from hostname
                           </span>

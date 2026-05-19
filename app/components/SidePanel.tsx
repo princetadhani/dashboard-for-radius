@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useHostStatus } from "../lib/use-host-status";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Loader2, CheckCircle2 } from "lucide-react";
+import { X, Loader2, CheckCircle2, Globe } from "lucide-react";
 import { toast } from "sonner";
 import type { Host, ProvisionDone, ProvisionLog, ProvisionStep } from "../lib/types";
 import { createHost, updateHost } from "../lib/api";
@@ -23,6 +24,8 @@ type Props = {
 type Phase = "idle" | "provisioning" | "success" | "error";
 
 export function SidePanel({ open, mode, editing, onClose, onSuccess }: Props) {
+  const liveStatus = useHostStatus(editing?.id ?? "");
+  const resolvedIps = liveStatus?.resolvedIps;
   const [friendlyName, setFriendlyName] = useState("");
   const [ipAddress, setIpAddress] = useState("");
   const [tags, setTags] = useState<string[]>([]);
@@ -199,6 +202,12 @@ export function SidePanel({ open, mode, editing, onClose, onSuccess }: Props) {
                       : ""
                     }`}
                 />
+                {mode === "edit" && resolvedIps !== undefined && resolvedIps.length === 0 && (
+                  <div className="flex items-center gap-1.5 mt-1.5 text-xs text-red-500">
+                    <Globe size={11} />
+                    DNS resolution failed — this hostname could not be resolved
+                  </div>
+                )}
               </Field>
 
               <Field label="Tags">
@@ -273,30 +282,45 @@ export function SidePanel({ open, mode, editing, onClose, onSuccess }: Props) {
             </form>
 
             <footer className="px-6 py-4 border-t border-border flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={phase === "provisioning"}
-                className="px-4 py-2 rounded-md text-text-dim hover:text-text hover:bg-white/10 disabled:opacity-30"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                form="provision-form"
-                disabled={phase === "provisioning" || formInvalid}
-                className={`px-4 py-2 rounded-md border flex items-center gap-2 transition-all ${phase === "provisioning" || formInvalid
-                  ? "bg-neon-blue/10 border-neon-blue/30 text-neon-blue/50 cursor-not-allowed"
-                  : "bg-neon-blue/20 border-neon-blue/50 text-neon-blue hover:bg-neon-blue/30 hover:border-neon-blue hover:shadow-lg hover:shadow-neon-blue/20 cursor-pointer"
-                  }`}
-              >
-                {phase === "provisioning" && <Loader2 size={16} className="animate-spin" />}
-                {mode === "edit"
-                  ? "Save Changes"
-                  : phase === "provisioning"
-                    ? "Provisioning..."
-                    : "Provision Host"}
-              </button>
+              {mode === "create" && phase === "success" ? (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-md border bg-neon-green/20 border-neon-green/50 text-neon-green hover:bg-neon-green/30 hover:border-neon-green flex items-center gap-2"
+                >
+                  <CheckCircle2 size={16} />
+                  Done
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    disabled={phase === "provisioning"}
+                    className="px-4 py-2 rounded-md text-text-dim hover:text-text hover:bg-white/10 disabled:opacity-30"
+                  >
+                    Cancel
+                  </button>
+                  {phase !== "success" && (
+                    <button
+                      type="submit"
+                      form="provision-form"
+                      disabled={phase === "provisioning" || formInvalid}
+                      className={`px-4 py-2 rounded-md border flex items-center gap-2 transition-all ${phase === "provisioning" || formInvalid
+                        ? "bg-neon-blue/10 border-neon-blue/30 text-neon-blue/50 cursor-not-allowed"
+                        : "bg-neon-blue/20 border-neon-blue/50 text-neon-blue hover:bg-neon-blue/30 hover:border-neon-blue hover:shadow-lg hover:shadow-neon-blue/20 cursor-pointer"
+                        }`}
+                    >
+                      {phase === "provisioning" && <Loader2 size={16} className="animate-spin" />}
+                      {mode === "edit"
+                        ? "Save Changes"
+                        : phase === "provisioning"
+                          ? "Provisioning..."
+                          : "Provision Host"}
+                    </button>
+                  )}
+                </>
+              )}
             </footer>
           </motion.aside>
         </>

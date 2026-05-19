@@ -59,7 +59,7 @@ export function Toolbar({
           onChange={onStatusFilterChange}
           className="w-40 shrink-0"
           options={[
-            { value: "all", label: "All statuses" },
+            { value: "all", label: "All status" },
             { value: "healthy", label: "Healthy" },
             { value: "unhealthy", label: "Unhealthy" },
             { value: "unreachable", label: "Unreachable" },

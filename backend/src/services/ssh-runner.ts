@@ -2,6 +2,7 @@ import { Client } from 'ssh2';
 import type { Server as IOServer } from 'socket.io';
 import { env } from '../lib/env.js';
 import { makeEmitter } from '../lib/provision-emit.js';
+import { resolveToConnectAddress } from '../lib/dns-resolver.js';
 
 function friendlySshError(e: Error & { code?: string }, host: string, port: number): string {
   switch (e.code) {
@@ -54,6 +55,7 @@ export async function runSshCommand(
   const { ipAddress, sshPort, sshUsername, sshPassword } = creds;
   const timeoutMs = opts.timeoutMs ?? env.sshInstallTimeoutMs;
   const { emitLog: emit, handleLine } = makeEmitter(io, room);
+  const connectHost = await resolveToConnectAddress(ipAddress);
 
   return await new Promise<CommandResult>((resolve) => {
     const conn = new Client();
@@ -128,7 +130,7 @@ export async function runSshCommand(
 
     emit(`Connecting to ${ipAddress}:${sshPort} as ${sshUsername}...`, 'system');
     conn.connect({
-      host: ipAddress,
+      host: connectHost,
       port: sshPort,
       username: sshUsername,
       password: sshPassword,
@@ -148,6 +150,7 @@ export async function sshExecCapture(
   timeoutMs = 15_000,
 ): Promise<{ ok: true; stdout: string } | { ok: false; error: string }> {
   const { ipAddress, sshPort, sshUsername, sshPassword } = creds;
+  const connectHost = await resolveToConnectAddress(ipAddress);
   return await new Promise((resolve) => {
     const conn = new Client();
     let resolved = false;
@@ -180,7 +183,7 @@ export async function sshExecCapture(
       finish({ ok: false, error: friendlySshError(e, ipAddress, sshPort) });
     });
     conn.connect({
-      host: ipAddress,
+      host: connectHost,
       port: sshPort,
       username: sshUsername,
       password: sshPassword,
