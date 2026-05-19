@@ -96,7 +96,7 @@ export function IpAddressDisplay({ primaryIp, knownIps, resolvedIps }: Props) {
         )}
         <span className="relative inline-flex items-center group/badge">
           <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-[11px] text-white whitespace-nowrap rounded-xl border border-white/25 backdrop-blur-md bg-white/10 shadow-[0_8px_20px_rgba(0,0,0,0.4),inset_0_0_10px_rgba(255,255,255,0.08)] opacity-0 invisible group-hover/badge:opacity-100 group-hover/badge:visible transition-all duration-150 pointer-events-none z-[9999]">
-            {totalCount} additional IP{totalCount > 1 ? 's' : ''} detected
+            {totalCount} additional IP{totalCount > 1 ? 's' : ''} detected on this radius server
             <span className="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-white/25" />
           </span>
           <button
