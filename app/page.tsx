@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Radio } from "lucide-react";
 import { toast } from "sonner";
 import type { Host, HostStatusUpdate, SshActionType } from "./lib/types";
-import { fetchHosts, fetchHost, probeHost, deleteHost, fetchLatestRelease } from "./lib/api";
+import { fetchHosts, fetchHost, probeHost, probeAll, deleteHost, fetchLatestRelease } from "./lib/api";
 import { getSocket } from "./lib/socket";
 import { statusStore } from "./lib/status-store";
 import { HostsTable, type SortState } from "./components/HostsTable";
@@ -43,6 +43,7 @@ export default function DashboardPage() {
       statusStore.set(s);
     }
     setStatusMap(m);
+    void probeAll();
   }, []);
 
   useEffect(() => {

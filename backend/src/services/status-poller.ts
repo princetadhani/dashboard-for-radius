@@ -210,6 +210,28 @@ export function startStatusPoller(io: IOServer): void {
   timer = setInterval(tick, env.statusPollIntervalMs);
 }
 
+// Prevents concurrent page-loads from triggering redundant full probe sweeps.
+let lastProbeAllAt = 0;
+const PROBE_ALL_COOLDOWN_MS = 30_000;
+
+/**
+ * Probe all hosts immediately. Skips if a full probe ran within the last 30s
+ * so concurrent browser sessions don't pile up duplicate sweeps.
+ */
+export async function triggerProbeAll(io: IOServer): Promise<void> {
+  const now = Date.now();
+  if (now - lastProbeAllAt < PROBE_ALL_COOLDOWN_MS) return;
+  lastProbeAllAt = now;
+  const hosts = await prisma.host.findMany({
+    select: { id: true, ipAddress: true, controlIp: true, knownIps: true, port: true },
+  });
+  const updates = await Promise.all(hosts.map((h) => probeHost(io, h)));
+  for (const u of updates) {
+    lastByHost.set(u.hostId, u);
+    io.emit('status:update', u);
+  }
+}
+
 /**
  * Immediately probe a single host by ID, store the result, and emit
  * status:update — used by the per-host refresh button.

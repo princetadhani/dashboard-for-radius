@@ -17,7 +17,7 @@ import {
   systemctlCommand,
 } from '../services/ssh-runner.js';
 import { runCopyConfig } from '../services/ssh-copy-config.js';
-import { getAllCachedStatuses, getCachedStatus, triggerProbe } from '../services/status-poller.js';
+import { getAllCachedStatuses, getCachedStatus, triggerProbe, triggerProbeAll } from '../services/status-poller.js';
 import { fetchLatestRelease } from '../lib/releases.js';
 
 type HostRow = {
@@ -64,6 +64,11 @@ export function buildHostsRouter(io: IOServer): Router {
       hosts: hosts.map(serialize),
       statuses: getAllCachedStatuses(),
     });
+  });
+
+  router.post('/probe-all', async (_req, res) => {
+    void triggerProbeAll(io);
+    res.status(204).end();
   });
 
   router.get('/:id', async (req, res) => {
