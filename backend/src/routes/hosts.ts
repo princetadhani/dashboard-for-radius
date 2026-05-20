@@ -237,21 +237,32 @@ export function buildHostsRouter(io: IOServer): Router {
 
     queueMicrotask(async () => {
       const room = `provision:${sessionId}`;
-      const result = await runSshCommand(
-        io,
-        room,
-        {
-          ipAddress: host.ipAddress,
-          sshPort: input.sshPort,
-          sshUsername: input.sshUsername,
-          sshPassword: input.sshPassword,
-        },
-        {
-          command,
-          timeoutMs:
-            input.action === 'restart-service' ? 60_000 : env.sshInstallTimeoutMs,
-        },
+      const runOpts = {
+        command,
+        timeoutMs: input.action === 'restart-service' ? 60_000 : env.sshInstallTimeoutMs,
+      };
+
+      // Try primary ipAddress first. If the connection itself fails (not a command
+      // error) and a proven-reachable controlIp exists, retry with that instead.
+      let result = await runSshCommand(
+        io, room,
+        { ipAddress: host.ipAddress, sshPort: input.sshPort, sshUsername: input.sshUsername, sshPassword: input.sshPassword },
+        runOpts,
       );
+
+      let sshTarget = host.ipAddress;
+      if (!result.success && result.connectionFailed && host.controlIp && host.controlIp !== host.ipAddress) {
+        io.to(room).emit('provision:log', {
+          line: `Could not reach ${host.ipAddress} — retrying via ${host.controlIp}...`,
+          level: 'system', ts: Date.now(), sessionId,
+        });
+        sshTarget = host.controlIp;
+        result = await runSshCommand(
+          io, room,
+          { ipAddress: sshTarget, sshPort: input.sshPort, sshUsername: input.sshUsername, sshPassword: input.sshPassword },
+          runOpts,
+        );
+      }
 
       if (!result.success) {
         io.to(room).emit('provision:done', { success: false, error: result.error, sessionId });
@@ -261,7 +272,7 @@ export function buildHostsRouter(io: IOServer): Router {
       // After install/repair, re-discover IPs (interfaces may have changed).
       // After restart, just use what we already know.
       const sshCreds = {
-        ipAddress: host.ipAddress,
+        ipAddress: sshTarget,
         sshPort: input.sshPort,
         sshUsername: input.sshUsername,
         sshPassword: input.sshPassword,

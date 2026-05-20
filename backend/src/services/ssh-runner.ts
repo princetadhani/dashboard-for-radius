@@ -32,7 +32,9 @@ export type SshCreds = {
   sshPassword: string;
 };
 
-export type CommandResult = { success: true } | { success: false; error: string };
+export type CommandResult =
+  | { success: true }
+  | { success: false; error: string; connectionFailed?: boolean };
 
 export type RunOptions = {
   /** Shell command to execute on the remote host. Caller is responsible for quoting. */
@@ -125,7 +127,7 @@ export async function runSshCommand(
       clearTimeout(timeout);
       const friendly = friendlySshError(e, ipAddress, sshPort);
       emit(`SSH error: ${friendly}`, 'stderr');
-      finish({ success: false, error: friendly });
+      finish({ success: false, error: friendly, connectionFailed: true });
     });
 
     emit(`Connecting to ${ipAddress}:${sshPort} as ${sshUsername}...`, 'system');
