@@ -3,7 +3,7 @@ import type { Server as IOServer } from 'socket.io';
 import { prisma } from '../lib/prisma.js';
 import { env } from '../lib/env.js';
 import {
-  copyConfigSchema,
+  // copyConfigSchema,
   createHostSchema,
   formatZodError,
   sshActionSchema,
@@ -16,7 +16,7 @@ import {
   runSshCommand,
   systemctlCommand,
 } from '../services/ssh-runner.js';
-import { runCopyConfig } from '../services/ssh-copy-config.js';
+// import { runCopyConfig } from '../services/ssh-copy-config.js';
 import { getAllCachedStatuses, getCachedStatus, triggerProbe, triggerProbeAll } from '../services/status-poller.js';
 import { fetchLatestRelease } from '../lib/releases.js';
 
@@ -326,69 +326,69 @@ export function buildHostsRouter(io: IOServer): Router {
     });
   });
 
-  router.post('/:id/copy-config', async (req, res) => {
-    const parsed = copyConfigSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: formatZodError(parsed.error) });
-    }
-    const sourceHost = await prisma.host.findUnique({ where: { id: req.params.id } });
-    const targetHost = await prisma.host.findUnique({ where: { id: parsed.data.targetHostId } });
-    if (!sourceHost || !targetHost) {
-      return res.status(404).json({ error: 'host not found' });
-    }
-    if (sourceHost.id === targetHost.id) {
-      return res.status(400).json({ error: 'source and target must be different hosts' });
-    }
+  // router.post('/:id/copy-config', async (req, res) => {
+  //   const parsed = copyConfigSchema.safeParse(req.body);
+  //   if (!parsed.success) {
+  //     return res.status(400).json({ error: formatZodError(parsed.error) });
+  //   }
+  //   const sourceHost = await prisma.host.findUnique({ where: { id: req.params.id } });
+  //   const targetHost = await prisma.host.findUnique({ where: { id: parsed.data.targetHostId } });
+  //   if (!sourceHost || !targetHost) {
+  //     return res.status(404).json({ error: 'host not found' });
+  //   }
+  //   if (sourceHost.id === targetHost.id) {
+  //     return res.status(400).json({ error: 'source and target must be different hosts' });
+  //   }
 
-    const sessionId = newSessionId('copy');
-    res.status(202).json({ sessionId });
+  //   const sessionId = newSessionId('copy');
+  //   res.status(202).json({ sessionId });
 
-    const input = parsed.data;
-    queueMicrotask(async () => {
-      const room = `provision:${sessionId}`;
-      const result = await runCopyConfig(io, room, {
-        sourceIp: sourceHost.ipAddress,
-        targetIp: targetHost.ipAddress,
-        sourceCreds: input.source,
-        targetCreds: input.target,
-      });
+  //   const input = parsed.data;
+  //   queueMicrotask(async () => {
+  //     const room = `provision:${sessionId}`;
+  //     const result = await runCopyConfig(io, room, {
+  //       sourceIp: sourceHost.ipAddress,
+  //       targetIp: targetHost.ipAddress,
+  //       sourceCreds: input.source,
+  //       targetCreds: input.target,
+  //     });
 
-      if (!result.success) {
-        io.to(room).emit('provision:done', { success: false, error: result.error, sessionId });
-        return;
-      }
+  //     if (!result.success) {
+  //       io.to(room).emit('provision:done', { success: false, error: result.error, sessionId });
+  //       return;
+  //     }
 
-      const targetSshCreds = {
-        ipAddress: targetHost.ipAddress,
-        sshPort: input.target.sshPort,
-        sshUsername: input.target.sshUsername,
-        sshPassword: input.target.sshPassword,
-      };
-      const previousKnown = parseStringList(targetHost.knownIps);
-      const candidates = Array.from(new Set([
-        ...(targetHost.controlIp ? [targetHost.controlIp] : []),
-        targetHost.ipAddress,
-        ...previousKnown,
-      ]));
-      const healthResult = await waitForHealthy(candidates, targetHost.port, io, room, targetSshCreds);
+  //     const targetSshCreds = {
+  //       ipAddress: targetHost.ipAddress,
+  //       sshPort: input.target.sshPort,
+  //       sshUsername: input.target.sshUsername,
+  //       sshPassword: input.target.sshPassword,
+  //     };
+  //     const previousKnown = parseStringList(targetHost.knownIps);
+  //     const candidates = Array.from(new Set([
+  //       ...(targetHost.controlIp ? [targetHost.controlIp] : []),
+  //       targetHost.ipAddress,
+  //       ...previousKnown,
+  //     ]));
+  //     const healthResult = await waitForHealthy(candidates, targetHost.port, io, room, targetSshCreds);
 
-      let updatedTarget = targetHost;
-      if (healthResult) {
-        const desiredControlIp = healthResult.ip === targetHost.ipAddress ? null : healthResult.ip;
-        if (desiredControlIp !== (targetHost.controlIp ?? null)) {
-          updatedTarget = await prisma.host.update({
-            where: { id: targetHost.id },
-            data: { controlIp: desiredControlIp },
-          });
-          io.emit('host:updated', serialize(updatedTarget));
-        }
-      }
+  //     let updatedTarget = targetHost;
+  //     if (healthResult) {
+  //       const desiredControlIp = healthResult.ip === targetHost.ipAddress ? null : healthResult.ip;
+  //       if (desiredControlIp !== (targetHost.controlIp ?? null)) {
+  //         updatedTarget = await prisma.host.update({
+  //           where: { id: targetHost.id },
+  //           data: { controlIp: desiredControlIp },
+  //         });
+  //         io.emit('host:updated', serialize(updatedTarget));
+  //       }
+  //     }
 
-      io.to(room).emit('provision:done', healthResult
-        ? { success: true, host: serialize(updatedTarget), sessionId }
-        : { success: false, error: 'Could not reach target host after config copy', sessionId });
-    });
-  });
+  //     io.to(room).emit('provision:done', healthResult
+  //       ? { success: true, host: serialize(updatedTarget), sessionId }
+  //       : { success: false, error: 'Could not reach target host after config copy', sessionId });
+  //   });
+  // });
 
   return router;
 }

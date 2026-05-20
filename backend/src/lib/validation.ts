@@ -76,17 +76,17 @@ export const sshActionSchema = z.object({
   sshPassword,
 });
 
-const sshCreds = z.object({
-  sshPort: port('SSH port').optional().default(22),
-  sshUsername,
-  sshPassword,
-});
+// const sshCreds = z.object({
+//   sshPort: port('SSH port').optional().default(22),
+//   sshUsername,
+//   sshPassword,
+// });
 
-export const copyConfigSchema = z.object({
-  targetHostId: z.string().min(1),
-  source: sshCreds,
-  target: sshCreds,
-});
+// export const copyConfigSchema = z.object({
+//   targetHostId: z.string().min(1),
+//   source: sshCreds,
+//   target: sshCreds,
+// });
 
 export type CreateHostInput = z.infer<typeof createHostSchema>;
 export type UpdateHostInput = z.infer<typeof updateHostSchema>;

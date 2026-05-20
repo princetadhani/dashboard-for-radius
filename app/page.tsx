@@ -11,7 +11,7 @@ import { HostsTable, type SortState } from "./components/HostsTable";
 import { SidePanel } from "./components/SidePanel";
 import { Toolbar, type StatusFilter } from "./components/Toolbar";
 import { SshActionModal } from "./components/SshActionModal";
-import { CopyConfigModal } from "./components/CopyConfigModal";
+// import { CopyConfigModal } from "./components/CopyConfigModal";
 
 export default function DashboardPage() {
   const [hosts, setHosts] = useState<Host[]>([]);
@@ -32,7 +32,7 @@ export default function DashboardPage() {
   const [actionType, setActionType] = useState<SshActionType | null>(null);
   const [actionHost, setActionHost] = useState<Host | null>(null);
 
-  const [copySource, setCopySource] = useState<Host | null>(null);
+  // const [copySource, setCopySource] = useState<Host | null>(null);
 
   const reload = useCallback(async () => {
     const { hosts, statuses } = await fetchHosts();
@@ -230,7 +230,7 @@ export default function DashboardPage() {
           }
         }}
         onAction={openSingleAction}
-        onCopyConfig={(h) => setCopySource(h)}
+        // onCopyConfig={(h) => setCopySource(h)}
         onRefresh={async (h) => {
           try {
             const [updated] = await Promise.all([fetchHost(h.id), probeHost(h.id)]);
@@ -258,11 +258,11 @@ export default function DashboardPage() {
         latestVersion={latestVersion}
       />
 
-      <CopyConfigModal
+      {/* <CopyConfigModal
         source={copySource}
         hosts={hosts}
         onClose={() => setCopySource(null)}
-      />
+      /> */}
     </main>
   );
 }

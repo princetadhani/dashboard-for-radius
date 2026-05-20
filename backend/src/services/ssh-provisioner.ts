@@ -51,7 +51,7 @@ export async function checkPort9000Free(
 
   // ss output includes users:(("processname",pid=N,...)) when a process owns the port.
   const match = r.stdout.match(/users:\(\("([^"]+)"/);
-  const occupiedBy = match ? match[1] : 'an unknown process';
+  const occupiedBy = match?.[1] ?? 'an unknown process';
   return { free: false, occupiedBy };
 }
 

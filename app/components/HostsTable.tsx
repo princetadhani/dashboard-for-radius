@@ -10,7 +10,7 @@ import {
   MoreVertical,
   RefreshCw,
   RotateCcw,
-  Copy,
+  // Copy,
   ArrowUp,
   ArrowDown,
   ChevronsUpDown,
@@ -61,7 +61,7 @@ type Props = {
   onEdit: (h: Host) => void;
   onDelete: (h: Host) => void;
   onAction: (h: Host, action: SshActionType) => void;
-  onCopyConfig: (source: Host) => void;
+  // onCopyConfig: (source: Host) => void;
   onRefresh: (h: Host) => Promise<void>;
   latestVersion?: string | null;
 };
@@ -147,7 +147,7 @@ export function HostsTable({
   onEdit,
   onDelete,
   onAction,
-  onCopyConfig,
+  // onCopyConfig,
   onRefresh,
   latestVersion,
 }: Props) {
@@ -475,12 +475,12 @@ export function HostsTable({
                 onClick={() => { onAction(host, "reinstall"); setMenuOpenId(null); setMenuPos(null); }}
                 dot={menuHasUpdate}
               />
-              <div className="border-t border-border my-1" />
+              {/* <div className="border-t border-border my-1" />
               <MenuItem
                 icon={<Copy size={14} />}
                 label="Copy config to another host..."
                 onClick={() => { onCopyConfig(host); setMenuOpenId(null); setMenuPos(null); }}
-              />
+              /> */}
             </div>
           );
         })(),

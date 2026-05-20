@@ -91,17 +91,17 @@ export async function fetchLatestRelease(): Promise<{ version: string; scriptUrl
   }
 }
 
-export async function copyConfig(
-  sourceHostId: string,
-  input: {
-    targetHostId: string;
-    source: { sshPort: number; sshUsername: string; sshPassword: string };
-    target: { sshPort: number; sshUsername: string; sshPassword: string };
-  },
-): Promise<{ sessionId: string }> {
-  return jsonFetch(`/api/hosts/${sourceHostId}/copy-config`, {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-}
+// export async function copyConfig(
+//   sourceHostId: string,
+//   input: {
+//     targetHostId: string;
+//     source: { sshPort: number; sshUsername: string; sshPassword: string };
+//     target: { sshPort: number; sshUsername: string; sshPassword: string };
+//   },
+// ): Promise<{ sessionId: string }> {
+//   return jsonFetch(`/api/hosts/${sourceHostId}/copy-config`, {
+//     method: "POST",
+//     body: JSON.stringify(input),
+//   });
+// }
 

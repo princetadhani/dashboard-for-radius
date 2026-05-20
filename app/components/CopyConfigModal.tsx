@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, CheckCircle2, Copy, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Host, ProvisionDone, ProvisionLog, ProvisionStep } from "../lib/types";
-import { copyConfig } from "../lib/api";
+// import { copyConfig } from "../lib/api";
 import { getSocket } from "../lib/socket";
 import { Select } from "./Select";
 import { Stepper } from "./Stepper";
@@ -61,11 +61,12 @@ export function CopyConfigModal({ source, hosts, onClose }: Props) {
     const targetCreds = sameCreds ? src : tgt;
 
     try {
-      const { sessionId } = await copyConfig(source.id, {
-        targetHostId: target.id,
-        source: src,
-        target: targetCreds,
-      });
+      // const { sessionId } = await copyConfig(source.id, {
+      //   targetHostId: target.id,
+      //   source: src,
+      //   target: targetCreds,
+      // });
+      const sessionId = "";
       setSrc((c) => ({ ...c, sshPassword: "" }));
       setTgt((c) => ({ ...c, sshPassword: "" }));
 
