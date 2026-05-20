@@ -210,6 +210,21 @@ export function startStatusPoller(io: IOServer): void {
   timer = setInterval(tick, env.statusPollIntervalMs);
 }
 
+/**
+ * Immediately probe a single host by ID, store the result, and emit
+ * status:update — used by the per-host refresh button.
+ */
+export async function triggerProbe(io: IOServer, hostId: string): Promise<void> {
+  const host = await prisma.host.findUnique({
+    where: { id: hostId },
+    select: { id: true, ipAddress: true, controlIp: true, knownIps: true, port: true },
+  });
+  if (!host) return;
+  const update = await probeHost(io, host);
+  lastByHost.set(update.hostId, update);
+  io.emit('status:update', update);
+}
+
 export function stopStatusPoller(): void {
   if (timer) clearInterval(timer);
   timer = null;

@@ -17,7 +17,7 @@ import {
   systemctlCommand,
 } from '../services/ssh-runner.js';
 import { runCopyConfig } from '../services/ssh-copy-config.js';
-import { getAllCachedStatuses, getCachedStatus } from '../services/status-poller.js';
+import { getAllCachedStatuses, getCachedStatus, triggerProbe } from '../services/status-poller.js';
 import { fetchLatestRelease } from '../lib/releases.js';
 
 type HostRow = {
@@ -70,6 +70,13 @@ export function buildHostsRouter(io: IOServer): Router {
     const host = await prisma.host.findUnique({ where: { id: req.params.id } });
     if (!host) return res.status(404).json({ error: 'host not found' });
     res.json(serialize(host));
+  });
+
+  router.post('/:id/probe', async (req, res) => {
+    const host = await prisma.host.findUnique({ where: { id: req.params.id } });
+    if (!host) return res.status(404).json({ error: 'host not found' });
+    void triggerProbe(io, host.id);
+    res.status(204).end();
   });
 
   router.get('/:id/status', (req, res) => {

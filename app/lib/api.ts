@@ -30,6 +30,10 @@ export async function fetchHost(id: string): Promise<Host> {
   return jsonFetch(`/api/hosts/${id}`);
 }
 
+export async function probeHost(id: string): Promise<void> {
+  await jsonFetch(`/api/hosts/${id}/probe`, { method: "POST" });
+}
+
 export async function createHost(input: {
   friendlyName: string;
   ipAddress: string;
