@@ -26,6 +26,10 @@ export async function fetchHosts(): Promise<{
   return jsonFetch("/api/hosts");
 }
 
+export async function fetchHost(id: string): Promise<Host> {
+  return jsonFetch(`/api/hosts/${id}`);
+}
+
 export async function createHost(input: {
   friendlyName: string;
   ipAddress: string;

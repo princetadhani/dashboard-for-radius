@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Radio } from "lucide-react";
 import { toast } from "sonner";
 import type { Host, HostStatusUpdate, SshActionType } from "./lib/types";
-import { fetchHosts, deleteHost, fetchLatestRelease } from "./lib/api";
+import { fetchHosts, fetchHost, deleteHost, fetchLatestRelease } from "./lib/api";
 import { getSocket } from "./lib/socket";
 import { statusStore } from "./lib/status-store";
 import { HostsTable, type SortState } from "./components/HostsTable";
@@ -230,6 +230,14 @@ export default function DashboardPage() {
         }}
         onAction={openSingleAction}
         onCopyConfig={(h) => setCopySource(h)}
+        onRefresh={async (h) => {
+          try {
+            const updated = await fetchHost(h.id);
+            setHosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : String(err));
+          }
+        }}
         latestVersion={latestVersion}
       />
 

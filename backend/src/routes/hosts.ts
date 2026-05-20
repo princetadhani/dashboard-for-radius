@@ -66,6 +66,12 @@ export function buildHostsRouter(io: IOServer): Router {
     });
   });
 
+  router.get('/:id', async (req, res) => {
+    const host = await prisma.host.findUnique({ where: { id: req.params.id } });
+    if (!host) return res.status(404).json({ error: 'host not found' });
+    res.json(serialize(host));
+  });
+
   router.get('/:id/status', (req, res) => {
     const snap = getCachedStatus(req.params.id);
     if (!snap) return res.status(404).json({ error: 'no status yet' });

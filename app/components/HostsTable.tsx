@@ -29,13 +29,13 @@ export type SortState = { key: SortKey; dir: "asc" | "desc" } | null;
 type ColKey = "name" | "endpoint" | "tags" | "host" | "service" | "lastSync" | "actions";
 
 const DEFAULT_WIDTHS: Record<ColKey, number> = {
-  name: 180,
+  name: 150,
   endpoint: 160,
   tags: 200,
   host: 70,
   service: 140,
   lastSync: 160,
-  actions: 150,
+  actions: 185,
 };
 
 const MIN_WIDTHS: Record<ColKey, number> = {
@@ -45,7 +45,7 @@ const MIN_WIDTHS: Record<ColKey, number> = {
   host: 60,
   service: 140,
   lastSync: 130,
-  actions: 150,
+  actions: 185,
 };
 
 // Columns that cannot be resized
@@ -62,6 +62,7 @@ type Props = {
   onDelete: (h: Host) => void;
   onAction: (h: Host, action: SshActionType) => void;
   onCopyConfig: (source: Host) => void;
+  onRefresh: (h: Host) => Promise<void>;
   latestVersion?: string | null;
 };
 
@@ -147,9 +148,11 @@ export function HostsTable({
   onDelete,
   onAction,
   onCopyConfig,
+  onRefresh,
   latestVersion,
 }: Props) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number; placement: "down" | "up" } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -353,7 +356,7 @@ export function HostsTable({
                 <RowStatus hostId={h.id} />
                 <td className="px-2 py-3">
                   {isConfirming ? (
-                    <div className="flex items-center justify-start gap-1">
+                    <div className="flex items-center justify-center gap-1">
                       <span className="text-xs text-text-dim mr-1">Delete?</span>
                       <button
                         onClick={() => { onDelete(h); setConfirmId(null); }}
@@ -381,6 +384,18 @@ export function HostsTable({
                       >
                         <ExternalLink size={16} />
                       </a>
+                      <button
+                        onClick={async () => {
+                          setRefreshingId(h.id);
+                          await onRefresh(h);
+                          setRefreshingId(null);
+                        }}
+                        disabled={refreshingId === h.id}
+                        className="p-2 rounded-md hover:bg-white/10 text-text-dim hover:text-text transition-colors disabled:opacity-40"
+                        title="Refresh host"
+                      >
+                        <RefreshCw size={16} className={refreshingId === h.id ? "animate-spin" : ""} />
+                      </button>
                       <button
                         onClick={() => onEdit(h)}
                         className="p-2 rounded-md hover:bg-white/10 text-text-dim hover:text-text transition-colors"
