@@ -426,10 +426,13 @@ export function HostsTable({
                           else menuTriggerRefs.current.delete(h.id);
                         }}
                         onClick={() => openMenu(h.id)}
-                        className="p-2 rounded-md hover:bg-white/10 text-text-dim hover:text-text transition-colors"
-                        title="More actions"
+                        className="relative p-2 rounded-md hover:bg-white/10 text-text-dim hover:text-text transition-colors"
+                        title={hasUpdate ? "Update available — click to see options" : "More actions"}
                       >
                         <MoreVertical size={16} />
+                        {hasUpdate && (
+                          <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-neon-red" />
+                        )}
                       </button>
                       <button
                         onClick={() => setConfirmId(h.id)}
@@ -470,6 +473,7 @@ export function HostsTable({
                 icon={<RefreshCw size={14} />}
                 label={menuHasUpdate ? `Update to ${latestVersion}` : "Reinstall / Repair"}
                 onClick={() => { onAction(host, "reinstall"); setMenuOpenId(null); setMenuPos(null); }}
+                dot={menuHasUpdate}
               />
               <div className="border-t border-border my-1" />
               <MenuItem
@@ -526,10 +530,12 @@ function MenuItem({
   icon,
   label,
   onClick,
+  dot,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
+  dot?: boolean;
 }) {
   return (
     <button
@@ -538,6 +544,7 @@ function MenuItem({
     >
       <span className="text-text-dim">{icon}</span>
       {label}
+      {dot && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-neon-red shrink-0" />}
     </button>
   );
 }
