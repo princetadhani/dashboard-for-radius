@@ -341,8 +341,14 @@ export function HostsTable({
                       {h.friendlyName}
                     </span>
                     {hasUpdate && (
-                      <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-neon-blue/15 border border-neon-blue/30 text-neon-blue font-medium leading-none">
-                        ↑ {latestVersion}
+                      <span className="relative inline-flex items-center group/upd shrink-0">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-neon-blue/15 border border-neon-blue/30 text-neon-blue font-medium leading-none cursor-default">
+                          ↑ {latestVersion}
+                        </span>
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1.5 text-[11px] text-white whitespace-nowrap rounded-xl border border-white/25 backdrop-blur-md bg-white/10 shadow-[0_8px_20px_rgba(0,0,0,0.4),inset_0_0_10px_rgba(255,255,255,0.08)] opacity-0 invisible group-hover/upd:opacity-100 group-hover/upd:visible transition-all duration-150 pointer-events-none z-[9999]">
+                          New version available — upgrade your FreeRADIUS UI portal
+                          <span className="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-white/25" />
+                        </span>
                       </span>
                     )}
                   </div>
