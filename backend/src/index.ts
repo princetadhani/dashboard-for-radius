@@ -6,7 +6,7 @@ import { env } from './lib/env.js';
 import { buildHostsRouter } from './routes/hosts.js';
 import releasesRouter from './routes/releases.js';
 import { attachSocketHandlers } from './sockets/index.js';
-import { startStatusPoller } from './services/status-poller.js';
+import { startStatusPoller, startInterfacePoller } from './services/status-poller.js';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -26,6 +26,7 @@ app.use('/api/releases', releasesRouter);
 
 attachSocketHandlers(io);
 startStatusPoller(io);
+startInterfacePoller(io);
 
 httpServer.listen(env.port, () => {
   console.log(`[backend] listening on http://localhost:${env.port}`);

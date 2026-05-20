@@ -214,3 +214,67 @@ export function stopStatusPoller(): void {
   if (timer) clearInterval(timer);
   timer = null;
 }
+
+const INTERFACE_POLL_MS = 15 * 60 * 1000; // 15 minutes
+let interfaceTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Fetch /api/service/dashboarddatadump from a single host and update
+ * knownIps in the DB if any new interfaces are discovered.
+ */
+async function pollHostInterfaces(io: IOServer, host: HostForProbe): Promise<void> {
+  const target = host.controlIp ?? host.ipAddress;
+  const url = `http://${target}:${host.port}/api/service/dashboarddatadump`;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 10_000);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(t);
+    if (!res.ok) return;
+
+    const body = (await res.json()) as { interfaces?: unknown };
+    if (!Array.isArray(body.interfaces)) return;
+
+    const incoming = (body.interfaces as unknown[])
+      .filter((ip): ip is string => typeof ip === 'string' && ip.length > 0);
+    if (incoming.length === 0) return;
+
+    const current = parseStringList(host.knownIps);
+    const hasNew = incoming.some((ip) => !current.includes(ip));
+    if (!hasNew) return;
+
+    // Merge without duplicates — never include the hostname itself
+    const merged = Array.from(new Set([...current, ...incoming]));
+    const updated = await prisma.host.update({
+      where: { id: host.id },
+      data: { knownIps: JSON.stringify(merged) },
+    });
+    io.emit('host:updated', {
+      ...updated,
+      tags: parseStringList(updated.tags),
+      knownIps: parseStringList(updated.knownIps),
+    });
+  } catch {
+    clearTimeout(t);
+    // Best-effort — silently skip unreachable hosts
+  }
+}
+
+export function startInterfacePoller(io: IOServer): void {
+  if (interfaceTimer) return;
+
+  const tick = async () => {
+    const hosts = await prisma.host.findMany({
+      select: { id: true, ipAddress: true, controlIp: true, knownIps: true, port: true },
+    });
+    await Promise.all(hosts.map((h) => pollHostInterfaces(io, h)));
+  };
+
+  void tick();
+  interfaceTimer = setInterval(tick, INTERFACE_POLL_MS);
+}
+
+export function stopInterfacePoller(): void {
+  if (interfaceTimer) clearInterval(interfaceTimer);
+  interfaceTimer = null;
+}
