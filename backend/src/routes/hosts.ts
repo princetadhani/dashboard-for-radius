@@ -9,7 +9,7 @@ import {
   sshActionSchema,
   updateHostSchema,
 } from '../lib/validation.js';
-import { discoverHostIps, runProvision, waitForHealthy } from '../services/ssh-provisioner.js';
+import { checkPort9000Free, discoverHostIps, runProvision, waitForHealthy } from '../services/ssh-provisioner.js';
 import { isHostname } from '../lib/dns-resolver.js';
 import {
   installScriptCommand,
@@ -89,6 +89,44 @@ export function buildHostsRouter(io: IOServer): Router {
 
     queueMicrotask(async () => {
       const room = `provision:${sessionId}`;
+
+      const sshCreds = {
+        ipAddress: input.ipAddress,
+        sshPort: input.sshPort,
+        sshUsername: input.sshUsername,
+        sshPassword: input.sshPassword,
+      };
+
+      io.to(room).emit('provision:log', {
+        line: 'Checking if port 9000 is available on the host...',
+        level: 'system',
+        ts: Date.now(),
+        sessionId,
+      });
+
+      const portCheck = await checkPort9000Free(sshCreds);
+      if (!portCheck.free) {
+        io.to(room).emit('provision:log', {
+          line: `Port 9000 is already in use by "${portCheck.occupiedBy}". Free it up before provisioning.`,
+          level: 'stderr',
+          ts: Date.now(),
+          sessionId,
+        });
+        io.to(room).emit('provision:done', {
+          success: false,
+          error: `Port 9000 is already occupied by "${portCheck.occupiedBy}" on this host. Stop that process first, then retry.`,
+          sessionId,
+        });
+        return;
+      }
+
+      io.to(room).emit('provision:log', {
+        line: 'Port 9000 is free — proceeding with installation.',
+        level: 'system',
+        ts: Date.now(),
+        sessionId,
+      });
+
       const release = await fetchLatestRelease();
       const result = await runProvision(io, room, {
         ipAddress: input.ipAddress,
@@ -102,12 +140,6 @@ export function buildHostsRouter(io: IOServer): Router {
         return;
       }
 
-      const sshCreds = {
-        ipAddress: input.ipAddress,
-        sshPort: input.sshPort,
-        sshUsername: input.sshUsername,
-        sshPassword: input.sshPassword,
-      };
       const discovered = await discoverHostIps(sshCreds);
       // candidates includes ipAddress for health-checking (waitForHealthy filters non-IPs itself)
       const candidates = Array.from(new Set([input.ipAddress, ...discovered]));

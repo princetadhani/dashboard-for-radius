@@ -30,6 +30,31 @@ const IPV4_RE = /^(\d{1,3}\.){3}\d{1,3}$/;
  * Falls back to an empty list on failure — caller should always include
  * the user-entered IP as a candidate too.
  */
+/**
+ * Check whether port 9000 is already bound on the remote host.
+ * Uses `ss` (iproute2 — present on all modern distros).
+ * Returns { free: true } if the port is available or the check is inconclusive.
+ * Returns { free: false, occupiedBy } if something is already listening.
+ */
+export async function checkPort9000Free(
+  creds: SshCreds,
+): Promise<{ free: true } | { free: false; occupiedBy: string }> {
+  // `|| true` ensures exit code 0 regardless so sshExecCapture doesn't treat
+  // "no match" (grep exit 1) as a failure.
+  const r = await sshExecCapture(
+    creds,
+    "ss -tlnp 2>/dev/null | grep ':9000' || true",
+    8_000,
+  );
+  // SSH itself failed — let provisioning proceed and surface the real error.
+  if (!r.ok || !r.stdout.trim()) return { free: true };
+
+  // ss output includes users:(("processname",pid=N,...)) when a process owns the port.
+  const match = r.stdout.match(/users:\(\("([^"]+)"/);
+  const occupiedBy = match ? match[1] : 'an unknown process';
+  return { free: false, occupiedBy };
+}
+
 export async function discoverHostIps(creds: SshCreds): Promise<string[]> {
   // Exclude docker/bridge virtual interfaces — their IPs (e.g. 172.17.0.1 on docker0)
   // exist on every Docker host and would cause the backend to probe itself.
