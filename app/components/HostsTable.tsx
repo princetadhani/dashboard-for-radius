@@ -153,6 +153,7 @@ export function HostsTable({
 }: Props) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [refreshedId, setRefreshedId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number; placement: "down" | "up" } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -390,18 +391,28 @@ export function HostsTable({
                       >
                         <ExternalLink size={16} />
                       </a>
-                      <button
-                        onClick={async () => {
-                          setRefreshingId(h.id);
-                          await onRefresh(h);
-                          setRefreshingId(null);
-                        }}
-                        disabled={refreshingId === h.id}
-                        className="p-2 rounded-md hover:bg-white/10 text-text-dim hover:text-text transition-colors disabled:opacity-40"
-                        title="Refresh host"
-                      >
-                        <RefreshCw size={16} className={refreshingId === h.id ? "animate-spin" : ""} />
-                      </button>
+                      <span className="relative inline-flex items-center group/refresh">
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-[11px] text-white whitespace-nowrap rounded-xl border border-white/25 backdrop-blur-md bg-white/10 shadow-[0_8px_20px_rgba(0,0,0,0.4),inset_0_0_10px_rgba(255,255,255,0.08)] opacity-0 invisible group-hover/refresh:opacity-100 group-hover/refresh:visible transition-all duration-150 pointer-events-none z-[9999]">
+                          Refresh host data & status
+                          <span className="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-white/25" />
+                        </span>
+                        <button
+                          onClick={async () => {
+                            setRefreshingId(h.id);
+                            await onRefresh(h);
+                            setRefreshingId(null);
+                            setRefreshedId(h.id);
+                            setTimeout(() => setRefreshedId(null), 500);
+                          }}
+                          disabled={refreshingId === h.id}
+                          className={`p-2 rounded-md hover:bg-white/10 transition-colors disabled:opacity-40 ${refreshedId === h.id ? "text-neon-green" : "text-text-dim hover:text-text"}`}
+                        >
+                          {refreshedId === h.id
+                            ? <Check size={16} />
+                            : <RotateCcw size={16} className={refreshingId === h.id ? "animate-spin" : ""} />
+                          }
+                        </button>
+                      </span>
                       <button
                         onClick={() => onEdit(h)}
                         className="p-2 rounded-md hover:bg-white/10 text-text-dim hover:text-text transition-colors"
