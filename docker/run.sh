@@ -4,7 +4,7 @@ set -euo pipefail
 IMAGE_NAME="${IMAGE_NAME:-radius-dashboard}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 CONTAINER_NAME="${CONTAINER_NAME:-radius-dashboard}"
-HOST_PORT="${HOST_PORT:-80}"
+HOST_PORT="${HOST_PORT:-5012}"
 DATA_DIR="${DATA_DIR:-$(pwd)/data}"
 
 if [ ! -d "$DATA_DIR" ]; then

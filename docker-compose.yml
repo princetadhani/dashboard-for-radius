@@ -7,12 +7,19 @@ services:
     container_name: radius-dashboard
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "5012:80"
     volumes:
       - ./data:/app/data
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/api/health"]
+      test: [ "CMD", "wget", "-qO-", "http://127.0.0.1/api/health" ]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 30s
+
+    networks:
+      - docker-net
+
+networks:
+  docker-net:
+    external: true
